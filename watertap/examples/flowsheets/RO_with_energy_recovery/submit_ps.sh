@@ -1,9 +1,14 @@
 #!/bin/bash 
-#SBATCH --ntasks=180 # Tasks to be run
 #SBATCH --nodes=5  # Run the tasks on the same node
+#SBATCH --ntasks-per-node=36 # Tasks per node to be run
 #SBATCH --time=4:00:00   # Required, estimate 5 minutes
 #SBATCH --account=watertap # Required
 #SBATCH --partition=short
+#SBATCH --mail-user=kinshuk.panda@nrel.gov
+#SBATCH --mail-type=BEGIN
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-type=REQUEUE
 
 cd /projects/watertap/kpanda/watertap/watertap/examples/flowsheets/RO_with_energy_recovery/
 module load conda/4.9.2
