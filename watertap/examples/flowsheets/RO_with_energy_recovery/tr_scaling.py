@@ -101,6 +101,7 @@ def run_parameter_sweep(
 if __name__ == "__main__":
 
     import time
+    import sys
     from mpi4py import MPI
 
     comm = MPI.COMM_WORLD
@@ -108,9 +109,14 @@ if __name__ == "__main__":
     comm_size = comm.Get_size()
 
     start_time = time.time()
+    if len(sys.argv) == 1:
+        num_samples = 10
+    else:
+        num_samples = int(sys.argv[1])
+    
     result_dict =  run_parameter_sweep(
         comm_size,
-        num_samples=10
+        num_samples=num_samples
     )
     comm.Barrier()
     end_time = time.time()

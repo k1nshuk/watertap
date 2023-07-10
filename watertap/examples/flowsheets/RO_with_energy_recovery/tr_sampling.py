@@ -81,7 +81,7 @@ def get_sweep_params_simple(m, scenario="use_LHS"):
     elif scenario == "WR_vs_NaCL_loading_vs_LCOW":
         num_samples = 10
         sweep_params["recovery"] = LinearSample(
-            m.fs.RO.recovery_mass_phase_comp[0, "Liq", "H2O"], 0.1, 0.7, num_samples
+            m.fs.RO.recovery_mass_phase_comp[0, "Liq", "H2O"], 0.1, 0.65, num_samples
         )
         sweep_params["NaCl_loading"] = LinearSample(
             m.fs.feed.properties[0].flow_mass_phase_comp["Liq", "NaCl"], 
@@ -151,7 +151,7 @@ def get_sweep_params_differential(m, num_samples, scenario="RandomSampling"):
             m.fs.costing.reverse_osmosis.membrane_cost, 10, 50, num_samples
         )
         sweep_params["ERD_efficiency"] = UniformSample(
-            m.fs.P2.efficiency_pump, 0.95, 0.99, num_samples
+            m.fs.PXR.efficiency_pressure_exchanger, 0.9, 0.99, num_samples
         ) # Is this the correct pyomo variable?
 
         differential_sweep_specs["A_comp"] = {
@@ -298,7 +298,7 @@ if __name__ == "__main__":
     # }
 
     run_type_dict = {
-        "simple" : ["WR_vs_NaCL_loading_vs_LCOW", "A_comp_vs_B_comp_vs_LCOW"], # ["WR_vs_Salinity_vs_LCOW"] # ["A_comp_vs_B_comp_vs_LCOW"],
+        "simple" : ["WR_vs_NaCL_loading_vs_LCOW"], # ["WR_vs_Salinity_vs_LCOW"] # ["A_comp_vs_B_comp_vs_LCOW"],
         # "recursive" : ["RandomSampling"],
         # "differential" : ["RandomSampling", "FixedSampling"]
     }
