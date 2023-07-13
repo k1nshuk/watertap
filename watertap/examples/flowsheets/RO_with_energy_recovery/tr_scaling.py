@@ -18,6 +18,7 @@ from watertap.tools.parameter_sweep import (
     LinearSample,
     GeomSample,
     ReverseGeomSample,
+    ParameterSweep,
     parameter_sweep,
     recursive_parameter_sweep,
     differential_parameter_sweep,
@@ -80,23 +81,39 @@ def run_parameter_sweep(
 
     
     sweep_params = get_sweep_params(m, num_samples)
-    # Run the parameter sweep
-    _, global_results_dict = parameter_sweep(
+    # # Run the parameter sweep
+    # _, global_results_dict = parameter_sweep(
+    #     m,
+    #     sweep_params,
+    #     outputs=outputs,
+    #     csv_results_file_name=csv_results_file_name,
+    #     h5_results_file_name=f"output/scaling/results_scaling_{comm_size}_{num_samples}.h5",
+    #     optimize_function=optimize,
+    #     optimize_kwargs={"solver": solver, "check_termination": False},
+    #     reinitialize_function=initialize_system,
+    #     reinitialize_kwargs={"solver": solver},
+    #     reinitialize_before_sweep=False,
+    #     num_samples=num_samples,
+    #     seed=seed,
+    # )
+    ps = ParameterSweep(
+            csv_results_file_name=csv_results_file_name,
+            h5_results_file_name=f"output/scaling/results_scaling_{comm_size}_{num_samples}.h5",
+            optimize_function=optimize,
+            optimize_kwargs={"solver": solver, "check_termination": False},
+            reinitialize_function=initialize_system,
+            reinitialize_kwargs={"solver": solver},
+            reinitialize_before_sweep=False,
+        )
+    _, global_results_dict = ps.parameter_sweep(
         m,
         sweep_params,
-        outputs=outputs,
-        csv_results_file_name=csv_results_file_name,
-        h5_results_file_name=f"output/scaling/results_scaling_{comm_size}_{num_samples}.h5",
-        optimize_function=optimize,
-        optimize_kwargs={"solver": solver, "check_termination": False},
-        reinitialize_function=initialize_system,
-        reinitialize_kwargs={"solver": solver},
-        reinitialize_before_sweep=False,
+        combined_outputs=outputs,
         num_samples=num_samples,
         seed=seed,
     )
     
-    return global_results_dict
+    return ps, global_results_dict
 
 if __name__ == "__main__":
 
@@ -114,7 +131,7 @@ if __name__ == "__main__":
     else:
         num_samples = int(sys.argv[1])
     
-    result_dict =  run_parameter_sweep(
+    ps, result_dict =  run_parameter_sweep(
         comm_size,
         num_samples=num_samples
     )
@@ -123,6 +140,11 @@ if __name__ == "__main__":
     time_elapsed = end_time - start_time
 
     if rank == 0:
+        assert ps.rank == rank
+        print("ps.time_building_combinations = ", ps.time_building_combinations)
+        print("ps.time_sweep_solves = ", ps.time_sweep_solves)
+        print("ps.time_gathering_results = ", ps.time_gathering_results)
+        print("ps.time_writing_files = ", ps.time_writing_files)
         print("time_elapsed = ", time_elapsed)
 
     comm.Barrier()

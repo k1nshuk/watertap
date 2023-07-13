@@ -19,6 +19,7 @@ from watertap.tools.parameter_sweep import (
     GeomSample,
     ReverseGeomSample,
     parameter_sweep,
+    ParameterSweep,
     recursive_parameter_sweep,
     differential_parameter_sweep,
 )
@@ -36,7 +37,7 @@ from watertap.tools.parameter_sweep import (
     set_defaults_from_yaml,
 )
 
-
+###############################################################################
 
 def get_sweep_params_simple_old(m, num_samples, scenario="use_LHS"):
     sweep_params = {}
@@ -67,6 +68,28 @@ def get_sweep_params_simple_old(m, num_samples, scenario="use_LHS"):
         # raise NotImplementedError
 
     return sweep_params
+
+def get_sweep_params_recursive_old(m, num_samples, scenario="RandomSampling"):
+    sweep_params = {}
+
+    # Define the sampling type and ranges for three different variables
+    if scenario == "RandomSampling":
+        sweep_params["A_comp"] = NormalSample(
+            m.fs.RO.A_comp, 4.0e-12, 0.5e-12, num_samples
+        )
+        sweep_params["B_comp"] = NormalSample(
+            m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
+        )
+        sweep_params["cost"] = UniformSample(
+            m.fs.costing.reverse_osmosis.membrane_cost, 10, 50, num_samples
+        )  # Show distribution of cost
+    else:
+        pass
+        # raise NotImplementedError
+
+    return sweep_params
+
+###############################################################################
 
 def get_sweep_params_simple(m, scenario="use_LHS"):
     sweep_params = {}
@@ -113,96 +136,41 @@ def get_sweep_params_simple(m, scenario="use_LHS"):
 
     return sweep_params, num_samples
 
-
-def get_sweep_params_recursive(m, num_samples, scenario="RandomSampling"):
-    sweep_params = {}
-
-    # Define the sampling type and ranges for three different variables
-    if scenario == "RandomSampling":
-        sweep_params["A_comp"] = NormalSample(
-            m.fs.RO.A_comp, 4.0e-12, 0.5e-12, num_samples
-        )
-        sweep_params["B_comp"] = NormalSample(
-            m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
-        )
-        sweep_params["cost"] = UniformSample(
-            m.fs.costing.reverse_osmosis.membrane_cost, 10, 50, num_samples
-        )  # Show distribution of cost
-    else:
-        pass
-        # raise NotImplementedError
-
-    return sweep_params
-
-
-def get_sweep_params_differential(m, num_samples, scenario="RandomSampling"):
+def get_sweep_params_differential(m):
+    num_samples = 3
     sweep_params = {}
     differential_sweep_specs = {}
 
-    # Define the sampling type and ranges for three different variables
-    if scenario == "RandomSampling":
-        sweep_params["A_comp"] = NormalSample(
-            m.fs.RO.A_comp, 4.0e-12, 0.5e-12, num_samples
-        )
-        sweep_params["B_comp"] = NormalSample(
-            m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
-        )
-        sweep_params["cost"] = UniformSample(
-            m.fs.costing.reverse_osmosis.membrane_cost, 10, 50, num_samples
-        )
-        sweep_params["ERD_efficiency"] = UniformSample(
-            m.fs.PXR.efficiency_pressure_exchanger, 0.9, 0.99, num_samples
-        ) # Is this the correct pyomo variable?
+    sweep_params["A_comp"] = LinearSample(
+        m.fs.RO.A_comp, 1.0e-12, 1e-11, num_samples
+    )
+    sweep_params["NaCl_loading"] = LinearSample(
+        m.fs.feed.properties[0].flow_mass_phase_comp["Liq", "NaCl"], 
+        0.01, 0.05, num_samples
+    )
+    sweep_params["Spacer_porosity"] = LinearSample(
+        m.fs.RO.feed_side.spacer_porosity, 0.95, 0.99, num_samples
+    )
 
-        differential_sweep_specs["A_comp"] = {
-            "diff_mode": "sum",
-            "diff_sample_type": NormalSample,
-            "std_dev": 1.0e-12,
-            "pyomo_object": m.fs.RO.A_comp,
-        }
-        differential_sweep_specs["B_comp"] = {
-            "diff_mode": "product",
-            "diff_sample_type": UniformSample,
-            "relative_lb": -0.01,
-            "relative_ub": -0.01,
-            "pyomo_object": m.fs.RO.B_comp,
-        }
-        differential_sweep_specs["ERD_efficiency"] = {
-            "diff_mode": "product",
-            "diff_sample_type": UniformSample,
-            "relative_lb": 0.01,
-            "relative_ub": 0.01,
-            "pyomo_object": m.fs.P2.efficiency_pump,
-        } # Is this the correct pyomo variable?
+    differential_sweep_specs["A_comp"] = {
+        "diff_sample_type": NormalSample,
+        "std_dev": 0.3e-12,
+        "pyomo_object": m.fs.RO.A_comp,
+    }
 
-    elif scenario == "FixedSampling":
-        sweep_params["A_comp"] = LinearSample(
-            m.fs.RO.A_comp, 4.0e-12, 0.5e-12, num_samples
-        )
-        sweep_params["B_comp"] = GeomSample(m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples)
-        sweep_params["Spacer_porosity"] = ReverseGeomSample(
-            m.fs.RO.feed_side.spacer_porosity, 0.95, 0.99, num_samples
-        )
+    differential_sweep_specs["Spacer_porosity"] = {
+        "diff_mode": "product",
+        "diff_sample_type": UniformSample,
+        "relative_lb": 0.95,
+        "relative_ub": 1.00,
+        "pyomo_object": m.fs.RO.feed_side.spacer_porosity,
+    }
 
-        differential_sweep_specs["B_comp"] = {
-            "diff_mode": "percentile",
-            "diff_sample_type": UniformSample,
-            "relative_lb": 0.01,
-            "relative_ub": 0.01,
-            "nominal_lb": 3.4e-8,
-            "nominal_ub": 3.6e-8,
-            "pyomo_object": m.fs.RO.B_comp,
-        }
-    else:
-        pass
-        # raise NotImplementedError
-
-    return sweep_params, differential_sweep_specs
+    return num_samples, sweep_params, differential_sweep_specs
 
 
 def run_parameter_sweep(
     run_type,
-    # num_samples=10,
     scenario="RandomSampling",
     csv_results_file_name=None,
     h5_results_file_name=None,
@@ -233,10 +201,22 @@ def run_parameter_sweep(
     if run_type == "simple":
         sweep_params, num_samples = get_sweep_params_simple(m, scenario=scenario)
         # Run the parameter sweep
-        _, global_results_dict = parameter_sweep(
-            m,
-            sweep_params,
-            outputs=outputs,
+        # _, global_results_dict = parameter_sweep(
+        #     m,
+        #     sweep_params,
+        #     outputs=outputs,
+        #     csv_results_file_name=csv_results_file_name,
+        #     h5_results_file_name=f"output/results_{run_type}_{scenario}_{num_samples}.h5",
+        #     optimize_function=optimize,
+        #     optimize_kwargs={"solver": solver, "check_termination": False},
+        #     reinitialize_function=initialize_system,
+        #     reinitialize_kwargs={"solver": solver},
+        #     reinitialize_before_sweep=False,
+        #     num_samples=num_samples,
+        #     seed=seed,
+        # )
+
+        ps = ParameterSweep(
             csv_results_file_name=csv_results_file_name,
             h5_results_file_name=f"output/results_{run_type}_{scenario}_{num_samples}.h5",
             optimize_function=optimize,
@@ -244,36 +224,27 @@ def run_parameter_sweep(
             reinitialize_function=initialize_system,
             reinitialize_kwargs={"solver": solver},
             reinitialize_before_sweep=False,
+        )
+        _, global_results_dict = ps.parameter_sweep(
+            m,
+            sweep_params,
+            combined_outputs=outputs,
             num_samples=num_samples,
             seed=seed,
         )
-    elif run_type == "recursive":
-        sweep_params = get_sweep_params_recursive(m, num_samples, scenario=scenario)
-        global_results_dict = recursive_parameter_sweep(
-            m,
-            sweep_params,
-            outputs=outputs,
-            csv_results_file_name=csv_results_file_name,
-            h5_results_file_name=h5_results_file_name,
-            optimize_function=optimize,
-            optimize_kwargs={"solver": solver, "check_termination": False},
-            req_num_samples=num_samples,
-            seed=seed,
-        )
     elif run_type == "differential":
-        sweep_params, differential_sweep_specs = get_sweep_params_differential(m, num_samples, scenario=scenario)
-        # pprint.pprint(sweep_params)
-        # pprint.pprint(differential_sweep_specs)
+        num_samples, sweep_params, differential_sweep_specs = get_sweep_params_differential(m)
         _, global_results_dict = differential_parameter_sweep(
             m,
             sweep_params,
             differential_sweep_specs,
             outputs=outputs,
             csv_results_file_name=csv_results_file_name,
-            h5_results_file_name=h5_results_file_name,
+            h5_results_file_name=f"output/results_{run_type}_{num_samples}.h5",
             optimize_function=optimize,
             optimize_kwargs={"solver": solver, "check_termination": False},
             num_samples=num_samples,
+            num_diff_samples=5,
             seed=seed,
         )
     else:
@@ -310,7 +281,6 @@ if __name__ == "__main__":
         for scenario in scenarios:
             results_dict[run_type][scenario] = run_parameter_sweep(
                 run_type,
-                # num_samples=num_samples,
                 scenario=scenario,
             )
         #     break
