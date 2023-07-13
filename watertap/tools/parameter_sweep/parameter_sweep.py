@@ -159,6 +159,12 @@ class _ParameterSweepBase(ABC):
         self.rank = self.comm.Get_rank()
 
         self.config = self.CONFIG(options)
+        
+        # Timing attributes
+        self.time_building_combinations = 0.0
+        self.time_sweep_solves = 0.0
+        self.time_gathering_results = 0.0
+        self.time_writing_files = 0.0
 
         # Initialize the writer
         self.writer = ParameterSweepWriter(
@@ -717,6 +723,7 @@ class ParameterSweep(_ParameterSweepBase):
         seed=None,
     ):
 
+        t0 = time.time()
         # Convert sweep_params to LinearSamples
         sweep_params, sampling_type = self._process_sweep_params(sweep_params)
 
@@ -727,6 +734,8 @@ class ParameterSweep(_ParameterSweepBase):
         all_parameter_combinations = self._build_combinations(
             sweep_params, sampling_type, num_samples
         )
+        t1 = time.time()
+        self.time_building_combinations = t1 - t0 # There is a broadcast here
 
         # Check if the outputs have the name attribute. If not, assign one.
         if combined_outputs is not None:
@@ -748,6 +757,9 @@ class ParameterSweep(_ParameterSweepBase):
             sweep_fn,
         )
 
+        t2 = time.time()
+        self.time_sweep_solves = t2 - t1
+
         # gather the results and combine them into the format we want
         gather_results = self.parallel_manager.gather()
         global_sweep_results = self._combine_gather_results(gather_results.all_results)
@@ -755,6 +767,9 @@ class ParameterSweep(_ParameterSweepBase):
 
         local_parameters = gather_results.local_results.parameters
         local_results_dict = gather_results.local_results.results
+
+        t3 = time.time()
+        self.time_gathering_results = t3 - t2
 
         # Save to file
         global_save_data = self.writer.save_results(
@@ -765,6 +780,9 @@ class ParameterSweep(_ParameterSweepBase):
             global_sweep_results,
             combined_outputs,
         )
+
+        t4 = time.time()
+        self.time_writing_files = t4 - t3
 
         return global_save_data, global_sweep_results
 
@@ -862,6 +880,7 @@ class RecursiveParameterSweep(_ParameterSweepBase):
         seed=None,
     ):
 
+        t0 = time.time()
         # Convert sweep_params to LinearSamples
         sweep_params, sampling_type = self._process_sweep_params(sweep_params)
 
@@ -876,8 +895,12 @@ class RecursiveParameterSweep(_ParameterSweepBase):
         num_total_samples = req_num_samples
 
         local_output_collection = {}
+        
+        t_prev = 0.0
+        self.time_building_combinations = []
+        self.time_sweep_solves = []
+        
         for loop_ctr in range(10):
-
             if n_samples_remaining <= 0:
                 break
 
@@ -893,6 +916,9 @@ class RecursiveParameterSweep(_ParameterSweepBase):
             # divide the workload between processors
             local_values = self._divide_combinations(global_values)
             local_num_cases = np.shape(local_values)[0]
+            t_ctr_1 = time.time()
+            self.time_building_combinations.append(t_ctr_1 - t_prev)
+
             if loop_ctr == 0:
                 true_local_num_cases = local_num_cases
 
@@ -946,6 +972,9 @@ class RecursiveParameterSweep(_ParameterSweepBase):
             # The total number of samples to generate at the next iteration is a multiple of the total remaining samples
             scale_factor = 2.0 / max(success_prob, 0.10)
             num_total_samples = int(np.ceil(scale_factor * n_samples_remaining))
+            t_ctr_2 = time.time()
+            self.time_sweep_solves.append(t_ctr_2 - t_ctr_1)
+            t_prev = t_ctr_2
 
         # Now that we have all of the local output dictionaries, we need to construct
         # a consolidated dictionary based on a filter, e.g., optimal solves.
@@ -973,6 +1002,8 @@ class RecursiveParameterSweep(_ParameterSweepBase):
             global_filtered_results,
             global_filtered_values,
         ) = self._aggregate_filtered_results(local_filtered_dict, req_num_samples)
+        t3 = time.time()
+        self.time_gathering_results = t3 - t_prev
 
         # Now we can save this
         self.comm.Barrier()
@@ -986,5 +1017,8 @@ class RecursiveParameterSweep(_ParameterSweepBase):
             global_filtered_dict,
             global_filtered_results,
         )
+
+        t4 = time.time()
+        self.time_writing_files = t4 - t3
 
         return global_save_data
