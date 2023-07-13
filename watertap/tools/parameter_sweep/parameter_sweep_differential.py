@@ -9,6 +9,7 @@
 # information, respectively. These files are also available online at the URL
 # "https://github.com/watertap-org/watertap/"
 #################################################################################
+import time
 import numpy as np
 from pyomo.common.config import ConfigValue
 
@@ -383,6 +384,7 @@ class DifferentialParameterSweep(_ParameterSweepBase):
         seed=None,
     ):
 
+        t0 = time.time()
         # Create a base sweep_params
         sweep_params, sampling_type = self._process_sweep_params(sweep_params)
 
@@ -405,6 +407,9 @@ class DifferentialParameterSweep(_ParameterSweepBase):
         # divide the workload between processors
         local_values = self._divide_combinations(global_values)
         self.n_nominal_local = np.shape(local_values)[0]
+        t1 = time.time()
+        self.time_building_combinations = t1 - t0
+
 
         # Check if the outputs have the name attribute. If not, assign one.
         if outputs is not None:
@@ -430,6 +435,9 @@ class DifferentialParameterSweep(_ParameterSweepBase):
                 **self.config.custom_do_param_sweep_kwargs,
             )
 
+        t2 = time.time()
+        self.time_sweep_solves = t2 - t1
+
         # re-writing local_values
         local_values = self._collect_local_inputs(local_results_dict)
 
@@ -441,6 +449,9 @@ class DifferentialParameterSweep(_ParameterSweepBase):
             num_global_samples,
         ) = self._aggregate_results(local_results_dict)
 
+        t3 = time.time()
+        self.time_gathering_results = t3 - t2
+
         # Save to file
         global_save_data = self.writer.save_results(
             sweep_params,
@@ -450,5 +461,8 @@ class DifferentialParameterSweep(_ParameterSweepBase):
             global_results_dict,
             global_results_arr,
         )
+
+        t4 = time.time()
+        self.time_writing_files = t4 - t3
 
         return global_results_dict, global_save_data
