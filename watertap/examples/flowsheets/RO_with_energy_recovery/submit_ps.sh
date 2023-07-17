@@ -1,7 +1,7 @@
 #!/bin/bash 
 #SBATCH --nodes=6  # Run the tasks on the same node
 #SBATCH --ntasks-per-node=36 # Tasks per node to be run
-#SBATCH --time=4:00:00   # Required, estimate 5 minutes
+#SBATCH --time=1:30:00   # Required, estimate 5 minutes
 #SBATCH --account=watertap # Required
 #SBATCH --partition=short
 #SBATCH --qos=high

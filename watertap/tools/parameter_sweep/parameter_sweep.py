@@ -734,6 +734,7 @@ class ParameterSweep(_ParameterSweepBase):
         all_parameter_combinations = self._build_combinations(
             sweep_params, sampling_type, num_samples
         )
+        self.parallel_manager.sync_point()
         t1 = time.time()
         self.time_building_combinations = t1 - t0 # There is a broadcast here
 
@@ -757,6 +758,7 @@ class ParameterSweep(_ParameterSweepBase):
             sweep_fn,
         )
 
+        self.parallel_manager.sync_point()
         t2 = time.time()
         self.time_sweep_solves = t2 - t1
 
@@ -768,6 +770,7 @@ class ParameterSweep(_ParameterSweepBase):
         local_parameters = gather_results.local_results.parameters
         local_results_dict = gather_results.local_results.results
 
+        self.parallel_manager.sync_point()
         t3 = time.time()
         self.time_gathering_results = t3 - t2
 
@@ -781,6 +784,7 @@ class ParameterSweep(_ParameterSweepBase):
             combined_outputs,
         )
 
+        self.parallel_manager.sync_point()
         t4 = time.time()
         self.time_writing_files = t4 - t3
 
