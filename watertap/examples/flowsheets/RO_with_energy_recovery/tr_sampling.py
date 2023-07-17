@@ -141,13 +141,17 @@ def get_sweep_params_differential(m):
     sweep_params = {}
     differential_sweep_specs = {}
 
-    sweep_params["A_comp"] = LinearSample(
+    # Only improve A_comp
+    sweep_params["A_comp"] = UniformSample(
         m.fs.RO.A_comp, 1.0e-12, 1e-11, num_samples
     )
-    sweep_params["NaCl_loading"] = LinearSample(
-        m.fs.feed.properties[0].flow_mass_phase_comp["Liq", "NaCl"], 
-        0.01, 0.05, num_samples
-    )
+    # Do not do NaCl loading
+    # sweep_params["NaCl_loading"] = LinearSample(
+    #     m.fs.feed.properties[0].flow_mass_phase_comp["Liq", "NaCl"], 
+    #     0.01, 0.05, num_samples
+    # )
+    # DO membrane cost
+    # Pr
     sweep_params["Spacer_porosity"] = LinearSample(
         m.fs.RO.feed_side.spacer_porosity, 0.95, 0.99, num_samples
     )
@@ -244,7 +248,7 @@ def run_parameter_sweep(
             optimize_function=optimize,
             optimize_kwargs={"solver": solver, "check_termination": False},
             num_samples=num_samples,
-            num_diff_samples=5,
+            num_diff_samples=1,
             seed=seed,
         )
     else:
