@@ -137,14 +137,10 @@ def get_sweep_params_simple(m, scenario="use_LHS"):
     return sweep_params, num_samples
 
 def get_sweep_params_differential(m):
-    num_samples = 3
+    num_samples = 1000
     sweep_params = {}
     differential_sweep_specs = {}
 
-    # Only improve A_comp
-    sweep_params["A_comp"] = UniformSample(
-        m.fs.RO.A_comp, 1.0e-12, 1e-11, num_samples
-    )
     # Do not do NaCl loading
     # sweep_params["NaCl_loading"] = LinearSample(
     #     m.fs.feed.properties[0].flow_mass_phase_comp["Liq", "NaCl"], 
@@ -152,23 +148,64 @@ def get_sweep_params_differential(m):
     # )
     # DO membrane cost
     # Pr
-    sweep_params["Spacer_porosity"] = LinearSample(
-        m.fs.RO.feed_side.spacer_porosity, 0.95, 0.99, num_samples
+    # sweep_params["Spacer_porosity"] = UniformSample(
+    #     m.fs.RO.feed_side.spacer_porosity, 0.95, 0.99, num_samples
+    # )
+
+    # Only improve A_comp
+    sweep_params["A_comp"] = UniformSample(
+        m.fs.RO.A_comp, 4.2e-12, 2.1e-11, num_samples
+    )
+    sweep_params["membrane_cost"] = UniformSample(
+        m.fs.costing.reverse_osmosis.membrane_cost, 30, 10, num_samples
+    )
+    sweep_params["px_cost"] = UniformSample(
+        m.fs.costing.pressure_exchanger.cost, 535, 250, num_samples
+    )
+    sweep_params["px_efficiency"] = UniformSample(
+        m.fs.PXR.efficiency_pressure_exchanger, 0.95, 0.99, num_samples
     )
 
     differential_sweep_specs["A_comp"] = {
-        "diff_sample_type": NormalSample,
-        "std_dev": 0.3e-12,
+        "diff_sample_type": UniformSample,
+        "diff_mode": "percentile",
+        "nominal_lb" : sweep_params["A_comp"].lower_limit,
+        "nominal_ub" : sweep_params["A_comp"].upper_limit,
+        "relative_lb" : 0.05,
+        "relative_ub" : 0.05,
         "pyomo_object": m.fs.RO.A_comp,
     }
 
-    differential_sweep_specs["Spacer_porosity"] = {
-        "diff_mode": "product",
+    differential_sweep_specs["membrane_cost"] = {
         "diff_sample_type": UniformSample,
-        "relative_lb": 0.95,
-        "relative_ub": 1.00,
-        "pyomo_object": m.fs.RO.feed_side.spacer_porosity,
+        "diff_mode": "percentile",
+        "nominal_lb" : sweep_params["membrane_cost"].lower_limit,
+        "nominal_ub" : sweep_params["membrane_cost"].upper_limit,
+        "relative_lb" : -0.05,
+        "relative_ub" : -0.05,
+        "pyomo_object": m.fs.costing.reverse_osmosis.membrane_cost,
     }
+
+    differential_sweep_specs["px_cost"] = {
+        "diff_sample_type": UniformSample,
+        "diff_mode": "percentile",
+        "nominal_lb" : sweep_params["px_cost"].lower_limit,
+        "nominal_ub" : sweep_params["px_cost"].upper_limit,
+        "relative_lb" : -0.05,
+        "relative_ub" : -0.05,
+        "pyomo_object": m.fs.costing.pressure_exchanger.cost,
+    }
+
+    differential_sweep_specs["px_efficiency"] = {
+        "diff_sample_type": UniformSample,
+        "diff_mode": "percentile",
+        "nominal_lb" : sweep_params["px_efficiency"].lower_limit,
+        "nominal_ub" : sweep_params["px_efficiency"].upper_limit,
+        "relative_lb" : 0.02,
+        "relative_ub" : 0.02,
+        "pyomo_object": m.fs.PXR.efficiency_pressure_exchanger,
+    }
+
 
     return num_samples, sweep_params, differential_sweep_specs
 
@@ -204,22 +241,6 @@ def run_parameter_sweep(
 
     if run_type == "simple":
         sweep_params, num_samples = get_sweep_params_simple(m, scenario=scenario)
-        # Run the parameter sweep
-        # _, global_results_dict = parameter_sweep(
-        #     m,
-        #     sweep_params,
-        #     outputs=outputs,
-        #     csv_results_file_name=csv_results_file_name,
-        #     h5_results_file_name=f"output/results_{run_type}_{scenario}_{num_samples}.h5",
-        #     optimize_function=optimize,
-        #     optimize_kwargs={"solver": solver, "check_termination": False},
-        #     reinitialize_function=initialize_system,
-        #     reinitialize_kwargs={"solver": solver},
-        #     reinitialize_before_sweep=False,
-        #     num_samples=num_samples,
-        #     seed=seed,
-        # )
-
         ps = ParameterSweep(
             csv_results_file_name=csv_results_file_name,
             h5_results_file_name=f"output/results_{run_type}_{scenario}_{num_samples}.h5",
@@ -260,22 +281,11 @@ def run_parameter_sweep(
 
 
 if __name__ == "__main__":
+
     # For testing this file, a seed needs to be provided as an additional argument, i.e. seed=1
-    run_type_list = ["simple", "recursive", "differential"]
-
-    # new_run_type_dict = {
-    #     "simple" : {
-    #                 "scenario" : ["use_LHS", "RandomSampling", "FixedSampling"],
-    #                 "num_samples" : [100, 10000, 100]
-    #                 }
-    #     "recursive" : ["RandomSampling"],
-    #     "differential" : ["RandomSampling", "FixedSampling"]
-    # }
-
     run_type_dict = {
-        "simple" : ["WR_vs_NaCL_loading_vs_LCOW"], # ["WR_vs_Salinity_vs_LCOW"] # ["A_comp_vs_B_comp_vs_LCOW"],
-        # "recursive" : ["RandomSampling"],
-        # "differential" : ["RandomSampling", "FixedSampling"]
+        # "simple" : ["WR_vs_NaCL_loading_vs_LCOW"], # ["WR_vs_Salinity_vs_LCOW"] # ["A_comp_vs_B_comp_vs_LCOW"],
+        "differential" : ["UniformSampling"],
     }
     # num_samples = 100
     results_dict = {}
