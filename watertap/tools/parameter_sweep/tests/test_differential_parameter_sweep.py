@@ -32,8 +32,14 @@ from watertap.tools.parameter_sweep.tests.test_parameter_sweep import (
     _assert_h5_csv_agreement,
     _optimization,
     _reinitialize,
+    build_model,
+    build_sweep_params_for_tps,
 )
 import watertap.tools.MPI as MPI
+
+
+def build_none_outputs(model):
+    return None
 
 
 @pytest.fixture
@@ -65,7 +71,6 @@ def model():
 
 @pytest.mark.component
 def test_check_differential_sweep_key_validity(model):
-
     m = model
 
     A = m.fs.input["a"]
@@ -98,7 +103,6 @@ def test_check_differential_sweep_key_validity(model):
 
 @pytest.mark.component
 def test_create_differential_sweep_params_normal(model):
-
     m = model
 
     differential_sweep_specs = {
@@ -132,7 +136,6 @@ def test_create_differential_sweep_params_normal(model):
 
 @pytest.mark.component
 def test_create_differential_sweep_params_sum_prod(model):
-
     m = model
 
     differential_sweep_specs = {
@@ -170,7 +173,6 @@ def test_create_differential_sweep_params_sum_prod(model):
 
 @pytest.mark.component
 def test_create_differential_sweep_params_percentile(model):
-
     m = model
 
     differential_sweep_specs = {
@@ -202,7 +204,6 @@ def test_create_differential_sweep_params_percentile(model):
 
 @pytest.mark.component
 def test_bad_differential_sweep_specs(model, tmp_path):
-
     m = model
 
     differential_sweep_specs = {
@@ -222,25 +223,18 @@ def test_bad_differential_sweep_specs(model, tmp_path):
         },
     }
 
-    A = m.fs.input["a"]
-    B = m.fs.input["b"]
-    sweep_params = {A.name: (A, 0.1, 0.9, 3), B.name: (B, 0.0, 0.5, 3)}
-
     ps = DifferentialParameterSweep(differential_sweep_specs=differential_sweep_specs)
     with pytest.raises(ValueError):
         ps.parameter_sweep(
-            m,
-            sweep_params,
-            outputs=None,
+            build_model,
+            build_sweep_params_for_tps,
+            build_outputs=build_none_outputs,
             seed=0,
         )
 
 
 @pytest.mark.component
 def test_differential_sweep_outputs(model):
-
-    comm = MPI.COMM_WORLD
-
     m = model
     m.fs.slack_penalty = 1000.0
     m.fs.slack.setub(0)
@@ -262,7 +256,6 @@ def test_differential_sweep_outputs(model):
     outputs = {"fs.output[c]": m.fs.output["c"]}
 
     ps = DifferentialParameterSweep(
-        comm=comm,
         optimize_function=_optimization,
         reinitialize_function=_reinitialize,
         reinitialize_kwargs={"slack_penalty": 10.0},
@@ -281,7 +274,6 @@ def test_differential_sweep_outputs(model):
 
 @pytest.mark.component
 def test_differential_parameter_sweep(model, tmp_path):
-
     comm = MPI.COMM_WORLD
     tmp_path = "./output/"  # _get_rank0_path(comm, tmp_path)
 
@@ -290,13 +282,11 @@ def test_differential_parameter_sweep(model, tmp_path):
     h5_results_file_name = str(results_fname) + ".h5"
 
     m = model
-    m.fs.slack_penalty = 1000.0
-    m.fs.slack.setub(0)
+    m.fs.slack_penalty = 10.0
+    m.fs.slack.setub(None)
 
     A = m.fs.input["a"]
     B = m.fs.input["b"]
-    sweep_params = {A.name: (A, 0.1, 0.9, 3), B.name: (B, 0.0, 0.5, 3)}
-
     differential_sweep_specs = {
         A.name: {
             "diff_mode": "sum",
@@ -314,27 +304,25 @@ def test_differential_parameter_sweep(model, tmp_path):
     }
 
     ps = DifferentialParameterSweep(
-        comm=comm,
         csv_results_file_name=csv_results_file_name,
         h5_results_file_name=h5_results_file_name,
         debugging_data_dir=tmp_path,
         interpolate_nan_outputs=True,
         optimize_function=_optimization,
-        reinitialize_function=_reinitialize,
-        reinitialize_kwargs={"slack_penalty": 10.0},
         differential_sweep_specs=differential_sweep_specs,
+        initialize_function=_reinitialize,
+        number_of_subprocesses=1,
     )
 
     # Call the parameter_sweep function
-    global_results_dict, _ = ps.parameter_sweep(
-        m,
-        sweep_params,
-        outputs=None,
+    _, global_results_dict = ps.parameter_sweep(
+        build_model,
+        build_sweep_params_for_tps,
+        build_outputs=None,
         seed=0,
     )
 
-    if ps.rank == 0:
-
+    if ps.parallel_manager.is_root_process():
         truth_dict = {
             "differential_idx": np.array(
                 [
@@ -522,7 +510,7 @@ def test_differential_parameter_sweep(model, tmp_path):
                     "full_name": "fs.slack[ab_slack]",
                     "lower bound": 0,
                     "units": "None",
-                    "upper bound": 0,
+                    # "upper bound": 0,
                     "value": np.array(
                         [
                             0.0,
@@ -550,7 +538,7 @@ def test_differential_parameter_sweep(model, tmp_path):
                     "full_name": "fs.slack[cd_slack]",
                     "lower bound": 0,
                     "units": "None",
-                    "upper bound": 0,
+                    # "upper bound": 0,
                     "value": np.array(
                         [
                             0.0,
@@ -579,8 +567,6 @@ def test_differential_parameter_sweep(model, tmp_path):
                     "units": "None",
                     "value": np.array(
                         [
-                            1000.0,
-                            1000.0,
                             10.0,
                             10.0,
                             10.0,
@@ -588,8 +574,10 @@ def test_differential_parameter_sweep(model, tmp_path):
                             10.0,
                             10.0,
                             10.0,
-                            1000.0,
-                            1000.0,
+                            10.0,
+                            10.0,
+                            10.0,
+                            10.0,
                             10.0,
                             10.0,
                             10.0,
@@ -708,7 +696,8 @@ def test_differential_parameter_sweep(model, tmp_path):
 
         read_dict = _read_output_h5(h5_results_file_name)
         _assert_h5_csv_agreement(csv_results_file_name, read_dict)
-        if ps.parallel_manager.number_of_processes() > 1:
+        # _assert_dictionary_correctness(global_results_dict, read_dict)
+        if ps.parallel_manager.number_of_worker_processes() > 1:
             # Compare the sorted dictionary. We need to work with a sorted dictionary
             # because the differential parameter sweep produces a global dictionary
             # that is jumbled by the number of procs.
@@ -727,7 +716,6 @@ def test_differential_parameter_sweep(model, tmp_path):
 
 @pytest.mark.component
 def test_differential_parameter_sweep_selective(model, tmp_path):
-
     comm = MPI.COMM_WORLD
     tmp_path = _get_rank0_path(comm, tmp_path)
 
@@ -736,8 +724,8 @@ def test_differential_parameter_sweep_selective(model, tmp_path):
     h5_results_file_name = str(results_fname) + ".h5"
 
     m = model
-    m.fs.slack_penalty = 1000.0
-    m.fs.slack.setub(0)
+    m.fs.slack_penalty = 10.0
+    m.fs.slack.setub(None)
 
     A = m.fs.input["a"]
     B = m.fs.input["b"]
@@ -754,28 +742,35 @@ def test_differential_parameter_sweep_selective(model, tmp_path):
     }
 
     ps = DifferentialParameterSweep(
-        comm=comm,
         csv_results_file_name=csv_results_file_name,
         h5_results_file_name=h5_results_file_name,
         debugging_data_dir=tmp_path,
         interpolate_nan_outputs=True,
         optimize_function=_optimization,
-        reinitialize_function=_reinitialize,
-        reinitialize_kwargs={"slack_penalty": 10.0},
         differential_sweep_specs=differential_sweep_specs,
         num_diff_samples=2,
     )
 
     # Call the parameter_sweep function
-    global_results_dict, _ = ps.parameter_sweep(
+    outputs = {
+        "fs.input[a]": m.fs.input["a"],
+        "fs.input[b]": m.fs.input["b"],
+        "fs.output[c]": m.fs.output["c"],
+        "fs.output[d]": m.fs.output["d"],
+        "fs.performance": m.fs.performance,
+        "objective": m.objective,
+        "fs.slack[ab_slack]": m.fs.slack["ab_slack"],
+        "fs.slack[cd_slack]": m.fs.slack["cd_slack"],
+        "fs.slack_penalty": m.fs.slack_penalty,
+    }
+    _, global_results_dict = ps.parameter_sweep(
         m,
         sweep_params,
-        outputs=None,
+        build_outputs=outputs,
         seed=0,
     )
 
-    if ps.rank == 0:
-
+    if ps.parallel_manager.is_root_process():
         truth_dict = {
             "differential_idx": np.array(
                 [
@@ -1026,7 +1021,7 @@ def test_differential_parameter_sweep_selective(model, tmp_path):
                     "full_name": "fs.slack[ab_slack]",
                     "lower bound": 0,
                     "units": "None",
-                    "upper bound": 0,
+                    # "upper bound": 0,
                     "value": np.array(
                         [
                             0.0,
@@ -1063,7 +1058,7 @@ def test_differential_parameter_sweep_selective(model, tmp_path):
                     "full_name": "fs.slack[cd_slack]",
                     "lower bound": 0,
                     "units": "None",
-                    "upper bound": 0,
+                    # "upper bound": 0,
                     "value": np.array(
                         [
                             0.0,
@@ -1101,8 +1096,6 @@ def test_differential_parameter_sweep_selective(model, tmp_path):
                     "units": "None",
                     "value": np.array(
                         [
-                            1000.0,
-                            1000.0,
                             10.0,
                             10.0,
                             10.0,
@@ -1110,10 +1103,12 @@ def test_differential_parameter_sweep_selective(model, tmp_path):
                             10.0,
                             10.0,
                             10.0,
-                            1000.0,
-                            1000.0,
-                            1000.0,
-                            1000.0,
+                            10.0,
+                            10.0,
+                            10.0,
+                            10.0,
+                            10.0,
+                            10.0,
                             10.0,
                             10.0,
                             10.0,
@@ -1275,7 +1270,8 @@ def test_differential_parameter_sweep_selective(model, tmp_path):
 
         read_dict = _read_output_h5(h5_results_file_name)
         _assert_h5_csv_agreement(csv_results_file_name, read_dict)
-        if ps.parallel_manager.number_of_processes() > 1:
+        # _assert_dictionary_correctness(global_results_dict, read_dict)
+        if ps.parallel_manager.number_of_worker_processes() > 1:
             # Compare the sorted dictionary. We need to work with a sorted dictionary
             # because the differential parameter sweep produces a global dictionary
             # that is jumbled by the number of procs.
@@ -1294,7 +1290,6 @@ def test_differential_parameter_sweep_selective(model, tmp_path):
 
 @pytest.mark.component
 def test_differential_parameter_sweep_function(model, tmp_path):
-
     comm = MPI.COMM_WORLD
     tmp_path = _get_rank0_path(comm, tmp_path)
 
@@ -1303,8 +1298,8 @@ def test_differential_parameter_sweep_function(model, tmp_path):
     h5_results_file_name = str(results_fname) + ".h5"
 
     m = model
-    m.fs.slack_penalty = 1000.0
-    m.fs.slack.setub(0)
+    m.fs.slack_penalty = 10.0
+    m.fs.slack.setub(None)
 
     A = m.fs.input["a"]
     B = m.fs.input["b"]
@@ -1327,24 +1322,21 @@ def test_differential_parameter_sweep_function(model, tmp_path):
     }
 
     # Call the parameter_sweep function
-    global_results_dict, _ = differential_parameter_sweep(
-        model,
-        sweep_params,
+    _, global_results_dict = differential_parameter_sweep(
+        build_model,
+        build_sweep_params_for_tps,
         differential_sweep_specs,
-        outputs=None,
-        mpi_comm=comm,
+        build_outputs=None,
         csv_results_file_name=csv_results_file_name,
         h5_results_file_name=h5_results_file_name,
         debugging_data_dir=tmp_path,
         interpolate_nan_outputs=True,
         optimize_function=_optimization,
-        reinitialize_function=_reinitialize,
-        reinitialize_kwargs={"slack_penalty": 10.0},
+        initialize_function=_reinitialize,
         seed=0,
     )
 
     if comm.rank == 0:
-
         truth_dict = {
             "differential_idx": np.array(
                 [
@@ -1532,7 +1524,7 @@ def test_differential_parameter_sweep_function(model, tmp_path):
                     "full_name": "fs.slack[ab_slack]",
                     "lower bound": 0,
                     "units": "None",
-                    "upper bound": 0,
+                    # "upper bound": 0,
                     "value": np.array(
                         [
                             0.0,
@@ -1560,7 +1552,7 @@ def test_differential_parameter_sweep_function(model, tmp_path):
                     "full_name": "fs.slack[cd_slack]",
                     "lower bound": 0,
                     "units": "None",
-                    "upper bound": 0,
+                    # "upper bound": 0,
                     "value": np.array(
                         [
                             0.0,
@@ -1589,8 +1581,6 @@ def test_differential_parameter_sweep_function(model, tmp_path):
                     "units": "None",
                     "value": np.array(
                         [
-                            1000.0,
-                            1000.0,
                             10.0,
                             10.0,
                             10.0,
@@ -1598,8 +1588,10 @@ def test_differential_parameter_sweep_function(model, tmp_path):
                             10.0,
                             10.0,
                             10.0,
-                            1000.0,
-                            1000.0,
+                            10.0,
+                            10.0,
+                            10.0,
+                            10.0,
                             10.0,
                             10.0,
                             10.0,
@@ -1718,7 +1710,7 @@ def test_differential_parameter_sweep_function(model, tmp_path):
 
         read_dict = _read_output_h5(h5_results_file_name)
         _assert_h5_csv_agreement(csv_results_file_name, read_dict)
-        if comm.Get_size() > 1:
+        if comm.size > 1:
             # Compare the sorted dictionary. We need to work with a sorted dictionary
             # because the differential parameter sweep produces a global dictionary
             # that is jumbled by the number of procs.

@@ -37,7 +37,6 @@ import watertap.tools.MPI as MPI
 
 @pytest.fixture
 def model():
-
     """
     # Example Usage:
     # Set the number of trials
@@ -82,7 +81,6 @@ def model():
 
 @pytest.mark.component
 def test_aggregate_filtered_input_arr():
-
     ps = RecursiveParameterSweep()
 
     input_dict = {
@@ -161,7 +159,6 @@ def test_aggregate_filtered_input_arr():
 
 @pytest.mark.component
 def test_recursive_parameter_sweep(model, tmp_path):
-
     comm = MPI.COMM_WORLD
 
     tmp_path = _get_rank0_path(comm, tmp_path)
@@ -192,11 +189,11 @@ def test_recursive_parameter_sweep(model, tmp_path):
     seed = 0
 
     # Run the parameter sweep
-    data = ps.parameter_sweep(
+    data_array, results_dict = ps.parameter_sweep(
         m,
         sweep_params,
-        outputs=outputs,
-        req_num_samples=num_samples,
+        build_outputs=outputs,
+        num_samples=num_samples,
         seed=seed,
     )
 
@@ -215,23 +212,29 @@ def test_recursive_parameter_sweep(model, tmp_path):
         ]
     )
 
-    assert np.shape(data) == (10, 2)
-    assert np.allclose(reference_save_data, data, equal_nan=True)
-    assert np.allclose(np.sum(data, axis=1), value(m.fs.success_prob))
+    import pprint
 
-    if ps.rank == 0:
+    # print("data = ")
+    # pprint.pprint(data)
+    assert np.shape(data_array) == (10, 2)
+    assert np.allclose(reference_save_data, data_array, equal_nan=True)
+    assert np.allclose(np.sum(data_array, axis=1), value(m.fs.success_prob))
+
+    if ps.parallel_manager.is_root_process():
         # Check that the global results file is created
         assert os.path.isfile(csv_results_file)
 
         # Check that all local output files have been created
-        for k in range(ps.parallel_manager.number_of_processes()):
+        for k in range(ps.parallel_manager.number_of_worker_processes()):
             assert os.path.isfile(os.path.join(tmp_path, f"local_results_{k:03}.h5"))
             assert os.path.isfile(os.path.join(tmp_path, f"local_results_{k:03}.csv"))
 
         csv_data = np.genfromtxt(csv_results_file, skip_header=1, delimiter=",")
 
         # Compare the last row of the imported data to truth
-        assert np.allclose(data[-1, :], reference_save_data[-1, :], equal_nan=True)
+        assert np.allclose(
+            data_array[-1, :], reference_save_data[-1, :], equal_nan=True
+        )
 
         truth_dict = {
             "outputs": {
@@ -290,9 +293,10 @@ def test_recursive_parameter_sweep(model, tmp_path):
 
         read_dict = _read_output_h5(h5_results_file)
         _assert_dictionary_correctness(truth_dict, read_dict)
+        _assert_dictionary_correctness(truth_dict, results_dict)
 
         assert np.allclose(
-            data[:, -1], read_dict["outputs"]["x_val"]["value"][:num_samples]
+            data_array[:, -1], read_dict["outputs"]["x_val"]["value"][:num_samples]
         )
 
         # Check for the companion text file
@@ -334,13 +338,13 @@ def test_recursive_parameter_sweep_function(model, tmp_path):
     h5_results_file = str(results_fname) + ".h5"
 
     # Run the parameter sweep
-    data = recursive_parameter_sweep(
+    data_array, results_dict = recursive_parameter_sweep(
         m,
         sweep_params,
-        outputs=outputs,
+        build_outputs=outputs,
         csv_results_file_name=csv_results_file,
         h5_results_file_name=h5_results_file,
-        req_num_samples=num_samples,
+        num_samples=num_samples,
         debugging_data_dir=tmp_path,
         seed=seed,
     )
@@ -360,9 +364,9 @@ def test_recursive_parameter_sweep_function(model, tmp_path):
         ]
     )
 
-    assert np.shape(data) == (10, 2)
-    assert np.allclose(reference_save_data, data, equal_nan=True)
-    assert np.allclose(np.sum(data, axis=1), value(m.fs.success_prob))
+    assert np.shape(data_array) == (10, 2)
+    assert np.allclose(reference_save_data, data_array, equal_nan=True)
+    assert np.allclose(np.sum(data_array, axis=1), value(m.fs.success_prob))
 
     if comm.rank == 0:
         # Check that the global results file is created
@@ -376,7 +380,9 @@ def test_recursive_parameter_sweep_function(model, tmp_path):
         csv_data = np.genfromtxt(csv_results_file, skip_header=1, delimiter=",")
 
         # Compare the last row of the imported data to truth
-        assert np.allclose(data[-1, :], reference_save_data[-1, :], equal_nan=True)
+        assert np.allclose(
+            data_array[-1, :], reference_save_data[-1, :], equal_nan=True
+        )
 
         # Check for the h5 output
         truth_dict = {
@@ -436,8 +442,9 @@ def test_recursive_parameter_sweep_function(model, tmp_path):
 
         read_dict = _read_output_h5(h5_results_file)
         _assert_dictionary_correctness(truth_dict, read_dict)
+        _assert_dictionary_correctness(truth_dict, results_dict)
         assert np.allclose(
-            data[:, -1], read_dict["outputs"]["x_val"]["value"][:num_samples]
+            data_array[:, -1], read_dict["outputs"]["x_val"]["value"][:num_samples]
         )
 
         # Check for the companion text file

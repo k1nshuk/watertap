@@ -11,15 +11,20 @@
 #
 ###############################################################################
 """
-Dewatering unit model for BSM2. Based on IDAES separator unit
+Dewatering unit model for BSM2 and plant-wide wastewater treatment modeling. 
+This unit inherits from the IDAES separator unit.
 
-Model based on 
+Model based on
 
 J. Alex, L. Benedetti, J.B. Copp, K.V. Gernaey, U. Jeppsson,
 I. Nopens, M.N. Pons, C. Rosen, J.P. Steyer and
 P. A. Vanrolleghem
 Benchmark Simulation Model no. 2 (BSM2)
+
+Modifications made to TSS formulation based on ASM type.
 """
+from enum import Enum, auto
+
 # Import IDAES cores
 from idaes.core import (
     declare_process_block_class,
@@ -32,18 +37,33 @@ import idaes.logger as idaeslog
 from pyomo.environ import (
     Param,
     units as pyunits,
-    Set,
+    Var,
+    NonNegativeReals,
 )
+from pyomo.common.config import ConfigValue, In
 
 from idaes.core.util.exceptions import (
     ConfigurationError,
 )
+from watertap.costing.unit_models.dewatering import cost_dewatering
 
-__author__ = "Alejandro Garciadiego"
+__author__ = "Alejandro Garciadiego, Adam Atia"
 
 
 # Set up logger
 _log = idaeslog.getLogger(__name__)
+
+
+class ActivatedSludgeModelType(Enum):
+    """
+    ASM1: ASM1 model
+    ASM2D: ASM2D model
+    modified_ASM2D: modified ASM2D model for ADM1 compatibility
+    """
+
+    ASM1 = auto()
+    ASM2D = auto()
+    modified_ASM2D = auto()
 
 
 @declare_process_block_class("DewateringUnit")
@@ -55,6 +75,27 @@ class DewateringData(SeparatorData):
     CONFIG = SeparatorData.CONFIG()
     CONFIG.outlet_list = ["underflow", "overflow"]
     CONFIG.split_basis = SplittingType.componentFlow
+
+    CONFIG.declare(
+        "activated_sludge_model",
+        ConfigValue(
+            default=ActivatedSludgeModelType.ASM1,
+            domain=In(ActivatedSludgeModelType),
+            description="Activated Sludge Model used with unit",
+            doc="""
+        Options to account for version of activated sludge model property package.
+
+        **default** - ``ActivatedSludgeModelType.ASM1``
+
+    .. csv-table::
+        :header: "Configuration Options", "Description"
+
+        "``ActivatedSludgeModelType.ASM1``", "ASM1 model"
+        "``ActivatedSludgeModelType.ASM2D``", "ASM2D model"
+        "``ActivatedSludgeModelType.modified_ASM2D``", "modified ASM2D model for ADM1 compatibility"
+    """,
+        ),
+    )
 
     def build(self):
         """
@@ -90,44 +131,85 @@ class DewateringData(SeparatorData):
             doc="Percentage of suspended solids removed",
         )
 
-        @self.Expression(self.flowsheet().time, doc="Suspended solid concentration")
-        def TSS(blk, t):
-            return 0.75 * (
-                blk.inlet.conc_mass_comp[t, "X_I"]
-                + blk.inlet.conc_mass_comp[t, "X_P"]
-                + blk.inlet.conc_mass_comp[t, "X_BH"]
-                + blk.inlet.conc_mass_comp[t, "X_BA"]
-                + blk.inlet.conc_mass_comp[t, "X_S"]
+        self.electricity_consumption = Var(
+            self.flowsheet().time,
+            units=pyunits.kW,
+            bounds=(0, None),
+            doc="Electricity consumption of unit",
+        )
+
+        # 0.026 kWh/m3 average between averages of belt and screw presses & centrifuge in relation to flow capacity
+        self.energy_electric_flow_vol_inlet = Param(
+            self.flowsheet().time,
+            units=pyunits.kWh / (pyunits.m**3),
+            initialize=0.026,
+            mutable=True,
+            doc="Specific electricity intensity of unit",
+        )
+
+        @self.Constraint(self.flowsheet().time, doc="Electricity consumption equation")
+        def eq_electricity_consumption(blk, t):
+            return blk.electricity_consumption[t] == pyunits.convert(
+                blk.energy_electric_flow_vol_inlet[t] * blk.inlet.flow_vol[t],
+                to_units=pyunits.kW,
             )
+
+        self.hydraulic_retention_time = Var(
+            self.flowsheet().time,
+            initialize=1800,
+            domain=NonNegativeReals,
+            units=pyunits.s,
+            doc="Hydraulic retention time",
+        )
+        self.volume = Var(
+            self.flowsheet().time,
+            initialize=1800,
+            domain=NonNegativeReals,
+            units=pyunits.m**3,
+            doc="Hydraulic retention time",
+        )
+
+        @self.Constraint(self.flowsheet().time, doc="Hydraulic retention time equation")
+        def eq_hydraulic_retention(blk, t):
+            return (
+                self.hydraulic_retention_time[t]
+                == self.volume[t] / self.inlet.flow_vol[t]
+            )
+
+        @self.Expression(self.flowsheet().time, doc="Suspended solid concentration")
+        def TSS_in(blk, t):
+            if blk.config.activated_sludge_model == ActivatedSludgeModelType.ASM1:
+                return 0.75 * (
+                    sum(
+                        blk.inlet.conc_mass_comp[t, i]
+                        for i in blk.config.property_package.tss_component_set
+                    )
+                )
+            elif blk.config.activated_sludge_model == ActivatedSludgeModelType.ASM2D:
+                return blk.inlet.conc_mass_comp[
+                    t, blk.config.property_package.tss_component_set.first()
+                ]
+            elif (
+                blk.config.activated_sludge_model
+                == ActivatedSludgeModelType.modified_ASM2D
+            ):
+                return blk.mixed_state[t].TSS
+            else:
+                raise ConfigurationError(
+                    "The activated_sludge_model was not specified properly in configuration options."
+                )
 
         @self.Expression(self.flowsheet().time, doc="Dewatering factor")
         def f_dewat(blk, t):
-            return blk.p_dewat * (10 / (blk.TSS[t]))
+            return blk.p_dewat * (10 / (blk.TSS_in[t]))
 
         @self.Expression(self.flowsheet().time, doc="Remove factor")
         def f_q_du(blk, t):
             return blk.TSS_rem / (pyunits.kg / pyunits.m**3) / 100 / blk.f_dewat[t]
 
-        self.non_particulate_components = Set(
-            initialize=[
-                "S_I",
-                "S_S",
-                "S_O",
-                "S_NO",
-                "S_NH",
-                "S_ND",
-                "H2O",
-                "S_ALK",
-            ]
-        )
-
-        self.particulate_components = Set(
-            initialize=["X_I", "X_S", "X_P", "X_BH", "X_BA", "X_ND"]
-        )
-
         @self.Constraint(
             self.flowsheet().time,
-            self.particulate_components,
+            self.config.property_package.particulate_component_set,
             doc="particulate fraction",
         )
         def overflow_particulate_fraction(blk, t, i):
@@ -135,7 +217,7 @@ class DewateringData(SeparatorData):
 
         @self.Constraint(
             self.flowsheet().time,
-            self.non_particulate_components,
+            self.config.property_package.non_particulate_component_set,
             doc="soluble fraction",
         )
         def non_particulate_components(blk, t, i):
@@ -143,10 +225,17 @@ class DewateringData(SeparatorData):
 
     def _get_performance_contents(self, time_point=0):
         var_dict = {}
+        param_dict = {}
         for k in self.split_fraction.keys():
             if k[0] == time_point:
                 var_dict[f"Split Fraction [{str(k[1:])}]"] = self.split_fraction[k]
-        return {"vars": var_dict}
+        var_dict["Electricity consumption"] = self.electricity_consumption[time_point]
+        param_dict[
+            "Specific electricity consumption"
+        ] = self.energy_electric_flow_vol_inlet[time_point]
+        var_dict["Unit Volume"] = self.volume[time_point]
+        var_dict["Hydraulic Retention Time"] = self.hydraulic_retention_time[time_point]
+        return {"vars": var_dict, "params": param_dict}
 
     def _get_stream_table_contents(self, time_point=0):
         outlet_list = self.create_outlet_list()
@@ -161,3 +250,7 @@ class DewateringData(SeparatorData):
             io_dict[o] = getattr(self, o + "_state")
 
         return create_stream_table_dataframe(io_dict, time_point=time_point)
+
+    @property
+    def default_costing_method(self):
+        return cost_dewatering

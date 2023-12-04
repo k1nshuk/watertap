@@ -17,13 +17,17 @@ from watertap.tools.parameter_sweep.sampling_types import NormalSample
 from watertap.tools.parameter_sweep.parameter_sweep import (
     _ParameterSweepBase,
     ParameterSweep,
+    return_none,
 )
-from watertap.tools.MPI.dummy_mpi import DummyCOMM
-from watertap.tools.parallel.parallel_manager import SingleProcessParallelManager
+from watertap.tools.parallel.single_process_parallel_manager import (
+    SingleProcessParallelManager,
+)
+
+
+from pyomo.common.deprecation import deprecation_warning
 
 
 class DifferentialParameterSweep(_ParameterSweepBase):
-
     CONFIG = _ParameterSweepBase.CONFIG()
 
     CONFIG.declare(
@@ -88,7 +92,6 @@ class DifferentialParameterSweep(_ParameterSweepBase):
         self,
         **options,
     ):
-
         # Initialize the base Class
         super().__init__(**options)
 
@@ -96,7 +99,6 @@ class DifferentialParameterSweep(_ParameterSweepBase):
             raise NotImplementedError
 
     def _create_differential_sweep_params(self, local_values):
-
         differential_sweep_specs = self.config.differential_sweep_specs
 
         diff_sweep_param = {}
@@ -162,7 +164,6 @@ class DifferentialParameterSweep(_ParameterSweepBase):
         return output_dict
 
     def _append_differential_results(self, local_output_dict, diff_results_dict):
-
         for idx, diff_sol in diff_results_dict.items():
             for key, item in diff_sol.items():
                 # Solve status
@@ -211,7 +212,6 @@ class DifferentialParameterSweep(_ParameterSweepBase):
                             )
 
     def _collect_local_inputs(self, local_results_dict):
-
         num_local_samples = len(local_results_dict["solve_successful"])
         local_inputs = np.zeros(
             (num_local_samples, len(local_results_dict["sweep_params"])),
@@ -224,30 +224,30 @@ class DifferentialParameterSweep(_ParameterSweepBase):
         return local_inputs
 
     def _aggregate_input_arr(self, global_results_dict, num_global_samples):
-
         global_values = np.zeros(
             (num_global_samples, len(global_results_dict["sweep_params"])),
             dtype=float,
         )
 
-        if self.rank == 0:
+        if self.parallel_manager.is_root_process():
             for i, (key, item) in enumerate(
                 global_results_dict["sweep_params"].items()
             ):
                 global_values[:, i] = item["value"]
 
-        self.comm.Bcast(global_values, root=0)
+        self.parallel_manager.sync_array_with_peers(global_values)
 
         return global_values
 
     def _aggregate_results(self, local_output_dict):
-
         # Create the global results dictionary
         global_results_dict = self._create_global_output(local_output_dict)
 
         # Broadcast the number of global samples to all ranks
         num_global_samples = len(global_results_dict["solve_successful"])
-        num_global_samples = self.comm.bcast(num_global_samples, root=0)
+        num_global_samples = self.parallel_manager.sync_pyobject_with_peers(
+            num_global_samples
+        )
 
         global_results_arr = self._aggregate_results_arr(
             global_results_dict, num_global_samples
@@ -269,10 +269,15 @@ class DifferentialParameterSweep(_ParameterSweepBase):
         # We now need to get the mapping array. This only needs to happen on root
         local_num_cases_all = len(local_output_dict["solve_successful"])
         # AllGather the total size of the value array on each MPI rank
-        sample_split_arr = self.comm.allgather(local_num_cases_all)
+        sample_split_arr = self.parallel_manager.combine_data_with_peers(
+            local_num_cases_all
+        )
         num_total_samples = sum(sample_split_arr)
+
         # AllGather nominal values for creating the parallel offset
-        nominal_sample_split_arr = self.comm.allgather(self.n_nominal_local)
+        nominal_sample_split_arr = self.parallel_manager.combine_data_with_peers(
+            self.n_nominal_local
+        )
 
         # We need to create a global index and offset items accordingly. This
         # needs to happen on all ranks/workers.
@@ -293,27 +298,24 @@ class DifferentialParameterSweep(_ParameterSweepBase):
             )
 
         # Now we need to collect it on global_output_dict
-        self.comm.Gatherv(
+        self.parallel_manager.gather_arrays_to_root(
             sendbuf=local_output_dict["nominal_idx"],
-            recvbuf=(
+            recvbuf_spec=(
                 global_output_dict["nominal_idx"],
                 sample_split_arr,
             ),
-            root=0,
         )
-        self.comm.Gatherv(
+        self.parallel_manager.gather_arrays_to_root(
             sendbuf=local_output_dict["differential_idx"],
-            recvbuf=(
+            recvbuf_spec=(
                 global_output_dict["differential_idx"],
                 sample_split_arr,
             ),
-            root=0,
         )
 
         return global_output_dict
 
-    def _run_differential_sweep(self, model, local_value):
-
+    def _run_differential_sweep(self, local_value):
         diff_sweep_param_dict = self._create_differential_sweep_params(local_value)
 
         # We want this instance of the parameter sweep to run in serial
@@ -324,13 +326,15 @@ class DifferentialParameterSweep(_ParameterSweepBase):
             reinitialize_kwargs=self.config.reinitialize_kwargs,
             reinitialize_before_sweep=self.config.reinitialize_before_sweep,
             parallel_manager_class=SingleProcessParallelManager,
-            comm=DummyCOMM,
         )
+        # pass model_manager from refernce sweep, to diff sweep
+        # so we don't have to reijnit he model
+        diff_ps.model_manager = self.model_manager
 
         _, differential_sweep_output_dict = diff_ps.parameter_sweep(
-            model,
+            diff_ps.model_manager.model,
             diff_sweep_param_dict,
-            combined_outputs=self.differential_outputs,
+            build_outputs=self.differential_outputs,
             num_samples=self.config.num_diff_samples,
             seed=self.seed,
         )
@@ -339,34 +343,27 @@ class DifferentialParameterSweep(_ParameterSweepBase):
 
     def _run_sample(
         self,
-        model,
-        reinitialize_values,
         local_value_k,
         k,
         sweep_params,
         local_output_dict,
     ):
-
         run_successful = super()._run_sample(
-            model,
-            reinitialize_values,
             local_value_k,
             k,
             sweep_params,
             local_output_dict,
         )
         self.differential_sweep_output_dict[k] = self._run_differential_sweep(
-            model, local_value_k
+            local_value_k
         )
 
         return run_successful
 
-    def _do_param_sweep(self, model, sweep_params, outputs, local_values):
+    def _do_param_sweep(self, sweep_params, outputs, local_values):
         self.differential_sweep_output_dict = {}
 
-        local_output_dict = super()._do_param_sweep(
-            model, sweep_params, outputs, local_values
-        )
+        local_output_dict = super()._do_param_sweep(sweep_params, outputs, local_values)
 
         # Now append the outputs of the differential solves
         self._append_differential_results(
@@ -377,22 +374,78 @@ class DifferentialParameterSweep(_ParameterSweepBase):
 
     def parameter_sweep(
         self,
-        model,
-        sweep_params,
-        outputs=None,
+        build_model,
+        build_sweep_params,
+        build_outputs=None,
+        build_outputs_kwargs=None,
         num_samples=None,
         seed=None,
+        build_model_kwargs=None,
+        build_sweep_params_kwargs=None,
     ):
 
         t0 = time.time()
         # Create a base sweep_params
+        build_model_kwargs = (
+            build_model_kwargs if build_model_kwargs is not None else dict()
+        )
+        build_outputs_kwargs = (
+            build_outputs_kwargs if build_outputs_kwargs is not None else dict()
+        )
+        build_sweep_params_kwargs = (
+            build_sweep_params_kwargs
+            if build_sweep_params_kwargs is not None
+            else dict()
+        )
+
+        if not callable(build_model):
+            _model = build_model
+            build_model = lambda: _model
+            deprecation_warning(
+                "Passing a model directly to the parameter_sweep function is deprecated \
+                                and will not work with future implementations of parallelism.",
+                version="0.10.0",
+            )
+
+        if not callable(build_sweep_params):
+            _sweep_params = build_sweep_params
+            build_sweep_params = lambda model: _sweep_params
+            deprecation_warning(
+                "Passing sweep params directly to the parameter_sweep function is deprecated \
+                                and will not work with future implementations of parallelism.",
+                version="0.10.0",
+            )
+
+        if build_outputs is None:
+            build_outputs = return_none
+
+        if not callable(build_outputs):
+            _combined_outputs = build_outputs
+            build_outputs = lambda model: _combined_outputs
+            deprecation_warning(
+                "Passing the output dict directly to the parameter_sweep function is deprecated \
+                                and will not work with future implementations of parallelism.",
+                version="0.10.0",
+            )
+        # This should be depreciated in future versions
+        self.config.build_model = build_model
+        self.config.build_sweep_params = build_sweep_params
+        self.config.build_outputs = build_outputs
+        self.config.build_outputs_kwargs = build_outputs_kwargs
+        self.config.build_model_kwargs = build_model_kwargs
+        self.config.build_sweep_params_kwargs = build_sweep_params_kwargs
+
+        model = build_model(**build_model_kwargs)
+        sweep_params = build_sweep_params(model, **build_sweep_params_kwargs)
         sweep_params, sampling_type = self._process_sweep_params(sweep_params)
 
         # Check if the keys in the differential sweep specs exist in sweep params
         self._check_differential_sweep_key_validity(sweep_params)
 
         # Define differential sweep outputs
-        self.outputs = outputs
+        self.outputs = self.config.build_outputs(
+            model, *self.config.build_outputs_kwargs
+        )
         self._define_differential_sweep_outputs(sweep_params)
 
         # Set the seed before sampling
@@ -412,8 +465,8 @@ class DifferentialParameterSweep(_ParameterSweepBase):
 
 
         # Check if the outputs have the name attribute. If not, assign one.
-        if outputs is not None:
-            self._assign_variable_names(model, outputs)
+        if self.outputs is not None:
+            self.assign_variable_names(model, self.outputs)
 
         # Create a dictionary to store all the differential ps_objects
         self.diff_ps_dict = {}
@@ -421,16 +474,15 @@ class DifferentialParameterSweep(_ParameterSweepBase):
         # Do the Loop
         if self.config.custom_do_param_sweep is None:
             local_results_dict = self._do_param_sweep(
-                model,
                 sweep_params,
-                outputs,
+                self.outputs,
                 local_values,
             )
         else:
             local_results_dict = self.config.custom_do_param_sweep(
-                model,
+                self,
                 sweep_params,
-                outputs,
+                self.outputs,
                 local_values,
                 **self.config.custom_do_param_sweep_kwargs,
             )
@@ -460,9 +512,10 @@ class DifferentialParameterSweep(_ParameterSweepBase):
             local_results_dict,
             global_results_dict,
             global_results_arr,
+            self.parallel_manager.get_rank(),
         )
 
         t4 = time.time()
         self.time_writing_files = t4 - t3
 
-        return global_results_dict, global_save_data
+        return global_save_data, global_results_dict

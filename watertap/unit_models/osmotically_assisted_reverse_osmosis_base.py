@@ -23,7 +23,7 @@ from pyomo.environ import (
     units as pyunits,
     value,
 )
-from idaes.core import UnitModelBlockData, FlowDirection
+from idaes.core import UnitModelBlockData
 from idaes.core.solvers import get_solver
 from idaes.core.util import scaling as iscale
 from idaes.core.util.exceptions import ConfigurationError, InitializationError
@@ -38,6 +38,9 @@ from watertap.core.membrane_channel_base import (
 )
 
 from watertap.core import InitializationMixin
+from watertap.costing.unit_models.osmotically_assisted_reverse_osmosis import (
+    cost_osmotically_assisted_reverse_osmosis,
+)
 
 
 def _add_has_full_reporting(config_obj):
@@ -65,12 +68,7 @@ class OsmoticallyAssistedReverseOsmosisBaseData(
 
     """
 
-    def build(self):
-        """
-        Common variables and constraints for an OARO unit model
-
-        """
-        super().build()
+    def _process_config(self):
 
         if len(self.config.property_package.solvent_set) > 1:
             raise ConfigurationError(
@@ -90,14 +88,22 @@ class OsmoticallyAssistedReverseOsmosisBaseData(
                 )
             )
 
+    def build(self):
+        """
+        Common variables and constraints for an OARO unit model
+
+        """
+        super().build()
+
+        # Check configuration errors
+        self._process_config()
+
         # Raise exception if any of configuration arguments are provided incorrectly
         validate_membrane_config_args(self)
 
         # --------------------------------------------------------------
-        # Add feed side MembraneChannel Control Volume and setup
-        self._add_membrane_channel_and_geometry(
-            side="feed_side", flow_direction=FlowDirection.forward
-        )
+        # Add feed side and permeate side MembraneChannel Control Volume and setup
+        self._add_membrane_channels_and_geometry()
 
         self.feed_side.add_state_blocks(has_phase_equilibrium=False)
 
@@ -136,10 +142,6 @@ class OsmoticallyAssistedReverseOsmosisBaseData(
 
         # --------------------------------------------------------------
         # Add permeate side MembraneChannel Control Volume and setup
-        self._add_membrane_channel_and_geometry(
-            side="permeate_side", flow_direction=FlowDirection.backward
-        )
-
         self.permeate_side.add_state_blocks(has_phase_equilibrium=False)
 
         self.permeate_side.add_material_balances(
@@ -295,15 +297,17 @@ class OsmoticallyAssistedReverseOsmosisBaseData(
             )
 
         self._add_flux_balance()
-
+        if self.config.has_pressure_change:
+            self._add_deltaP(side="feed_side")
+            self._add_deltaP(side="permeate_side")
         self._add_mass_transfer()
 
         self.scaling_factor = Suffix(direction=Suffix.EXPORT)
 
-    def _add_deltaP(self):
+    def _add_mass_transfer(self):
         raise NotImplementedError()
 
-    def _add_mass_transfer(self):
+    def _add_membrane_channels_and_geometry(self):
         raise NotImplementedError()
 
     def _add_length_and_width(self):
@@ -328,7 +332,7 @@ class OsmoticallyAssistedReverseOsmosisBaseData(
         if not hasattr(self, "area"):
             self.area = Var(
                 initialize=10,
-                bounds=(1e-1, 1e3),
+                bounds=(1e-1, 1e5),
                 domain=NonNegativeReals,
                 units=units_meta("length") ** 2,
                 doc="Total Membrane area",
@@ -819,6 +823,14 @@ class OsmoticallyAssistedReverseOsmosisBaseData(
             if iscale.get_scaling_factor(v) is None:
                 iscale.set_scaling_factor(v, 1)
 
+        if hasattr(self, "length"):
+            if iscale.get_scaling_factor(self.length) is None:
+                iscale.set_scaling_factor(self.length, 1)
+
+        if hasattr(self, "width"):
+            if iscale.get_scaling_factor(self.width) is None:
+                iscale.set_scaling_factor(self.width, 1)
+
         if hasattr(self, "structural_parameter"):
             if iscale.get_scaling_factor(self.structural_parameter) is None:
                 # Structural parameter expected to be ~ 1200 microns
@@ -845,3 +857,7 @@ class OsmoticallyAssistedReverseOsmosisBaseData(
                     iscale.set_scaling_factor(v, sf)
                 sf = iscale.get_scaling_factor(v)
                 iscale.constraint_scaling_transform(self.eq_flux_mass[t, x, p, j], sf)
+
+    @property
+    def default_costing_method(self):
+        return cost_osmotically_assisted_reverse_osmosis
