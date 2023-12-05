@@ -139,8 +139,7 @@ if __name__ == "__main__":
     end_time = time.time()
     time_elapsed = end_time - start_time
 
-    if rank == 0:
-        assert ps.rank == rank
+    if ps.parallel_manager.is_root_process():
         print("ps.time_building_combinations = ", ps.time_building_combinations)
         print("ps.time_sweep_solves = ", ps.time_sweep_solves)
         print("ps.time_gathering_results = ", ps.time_gathering_results)

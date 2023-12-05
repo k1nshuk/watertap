@@ -253,7 +253,7 @@ def run_parameter_sweep(
         _, global_results_dict = ps.parameter_sweep(
             m,
             sweep_params,
-            combined_outputs=outputs,
+            outputs,
             num_samples=num_samples,
             seed=seed,
         )
@@ -263,7 +263,7 @@ def run_parameter_sweep(
             m,
             sweep_params,
             differential_sweep_specs,
-            outputs=outputs,
+            outputs,
             csv_results_file_name=csv_results_file_name,
             h5_results_file_name=f"output/results_{run_type}_{num_samples}.h5",
             optimize_function=optimize,
