@@ -39,55 +39,55 @@ from watertap.tools.parameter_sweep import (
 
 ###############################################################################
 
-def get_sweep_params_simple_old(m, num_samples, scenario="use_LHS"):
-    sweep_params = {}
+# def get_sweep_params_simple_old(m, num_samples, scenario="use_LHS"):
+#     sweep_params = {}
 
-    # Define the sampling type and ranges for three different variables
-    if scenario == "use_LHS":
-        sweep_params["A_comp"] = LatinHypercubeSample(
-            m.fs.RO.A_comp, 0.5e-12, 5e-12, num_samples
-        )
+#     # Define the sampling type and ranges for three different variables
+#     if scenario == "use_LHS":
+#         sweep_params["A_comp"] = LatinHypercubeSample(
+#             m.fs.RO.A_comp, 0.5e-12, 5e-12, num_samples
+#         )
 
-    elif scenario == "RandomSampling":
-        sweep_params["A_comp"] = NormalSample(
-            m.fs.RO.A_comp, 4.0e-12, 0.5e-12, num_samples
-        )
-        sweep_params["B_comp"] = NormalSample(
-            m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
-        )
+#     elif scenario == "RandomSampling":
+#         sweep_params["A_comp"] = NormalSample(
+#             m.fs.RO.A_comp, 4.0e-12, 0.5e-12, num_samples
+#         )
+#         sweep_params["B_comp"] = NormalSample(
+#             m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
+#         )
 
-    elif scenario == "FixedSampling":
-        sweep_params["A_comp"] = LinearSample(
-            m.fs.RO.A_comp, 1.0e-12, 1e-11, num_samples
-        )
-        # sweep_params["B_comp"] = LinearSample(
-        #     m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
-        # )
-    else:
-        pass
-        # raise NotImplementedError
+#     elif scenario == "FixedSampling":
+#         sweep_params["A_comp"] = LinearSample(
+#             m.fs.RO.A_comp, 1.0e-12, 1e-11, num_samples
+#         )
+#         # sweep_params["B_comp"] = LinearSample(
+#         #     m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
+#         # )
+#     else:
+#         pass
+#         # raise NotImplementedError
 
-    return sweep_params
+#     return sweep_params
 
-def get_sweep_params_recursive_old(m, num_samples, scenario="RandomSampling"):
-    sweep_params = {}
+# def get_sweep_params_recursive_old(m, num_samples, scenario="RandomSampling"):
+#     sweep_params = {}
 
-    # Define the sampling type and ranges for three different variables
-    if scenario == "RandomSampling":
-        sweep_params["A_comp"] = NormalSample(
-            m.fs.RO.A_comp, 4.0e-12, 0.5e-12, num_samples
-        )
-        sweep_params["B_comp"] = NormalSample(
-            m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
-        )
-        sweep_params["cost"] = UniformSample(
-            m.fs.costing.reverse_osmosis.membrane_cost, 10, 50, num_samples
-        )  # Show distribution of cost
-    else:
-        pass
-        # raise NotImplementedError
+#     # Define the sampling type and ranges for three different variables
+#     if scenario == "RandomSampling":
+#         sweep_params["A_comp"] = NormalSample(
+#             m.fs.RO.A_comp, 4.0e-12, 0.5e-12, num_samples
+#         )
+#         sweep_params["B_comp"] = NormalSample(
+#             m.fs.RO.B_comp, 3.5e-8, 0.5e-8, num_samples
+#         )
+#         sweep_params["cost"] = UniformSample(
+#             m.fs.costing.reverse_osmosis.membrane_cost, 10, 50, num_samples
+#         )  # Show distribution of cost
+#     else:
+#         pass
+#         # raise NotImplementedError
 
-    return sweep_params
+#     return sweep_params
 
 ###############################################################################
 
