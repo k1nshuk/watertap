@@ -106,7 +106,8 @@ def run_lsrro_case(
     )
     set_operating_conditions(m, Cin, Qin)
 
-    initialize(m)
+    initialize(m) # Write NL file here
+    m.write("lsrro_initialize.nl", io_options={"symbolic_solver_labels":True})
     solve(m)
     print("\n***---Simulation results---***")
     display_system(m)
@@ -125,7 +126,8 @@ def run_lsrro_case(
         permeate_quality_limit,
         AB_gamma_factor,
         B_max,
-    )
+    ) # Also write NL file here.
+    m.write("lsrro_preoptimize.nl", io_options={"symbolic_solver_labels":True})
     res = solve(m, raise_on_failure=False, tee=False)
     print("\n***---Optimization results---***")
     if check_optimal_termination(res):

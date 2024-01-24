@@ -67,7 +67,8 @@ def main(erd_type=ERDtype.pressure_exchanger):
     initialize_system(m, solver=solver)
 
     # optimize and display
-    optimize_set_up(m)
+    optimize_set_up(m) # Write out the model here!
+    m.write("RO_ERD.nl", io_options={"symbolic_solver_labels":True})
     solve(m, solver=solver)
 
     print("\n***---Simulation results---***")

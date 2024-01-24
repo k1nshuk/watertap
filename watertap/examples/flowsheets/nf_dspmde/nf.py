@@ -62,7 +62,8 @@ def main():
     m = build()
     initialize(m, solver)
     add_objective(m)
-    unfix_opt_vars(m)
+    unfix_opt_vars(m) # Write NL file here!. Write all with symbolic solvers!!!
+    m.write("NF_preoptimize.nl", io_options={"symbolic_solver_labels":True})
     results = optimize(m, solver)
     assert_optimal_termination(results)
     print("Optimal cost", m.fs.costing.LCOW.value)
@@ -303,7 +304,8 @@ def initialize(m, solver=None, **kwargs):
     init_system(m, solver)
     # solve box problem
     print("initalized, DOFs:", degrees_of_freedom(m))
-    assert degrees_of_freedom(m) == 0
+    assert degrees_of_freedom(m) == 0 # Write NL file here!
+    m.write("NF_preinitialize.nl", io_options={"symbolic_solver_labels":True})
     results = solver.solve(m, tee=False)
     assert_optimal_termination(results)
     print("Solved box problem")
