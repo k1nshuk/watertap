@@ -101,14 +101,36 @@ def cost_centrifuge(
     Centrifuge costing method
     """
     make_capital_cost_var(blk)
+    blk.costing_package.add_cost_factor(blk, "TIC")
     cost_blk = blk.costing_package.centrifuge
     t0 = blk.flowsheet().time.first()
+    # Assume inlet state block is `mixed_state` (IDAES Separator or WaterTAP Dewatering unit)
+    if hasattr(blk.unit_model.config, "mixed_state_block"):
+        if blk.unit_model.config.mixed_state_block is None:
+            sb = blk.unit_model.mixed_state[t0]
+        else:
+            sb = blk.unit_model.config.mixed_state_block[t0]
+    else:
+        raise TypeError(
+            "Costing of the dewatering unit is only compatible with an IDAES Separator or WaterTAP Dewatering Unit."
+        )
+
+    if hasattr(sb, "flow_vol"):
+        sb_flow_vol = getattr(sb, "flow_vol")
+    elif hasattr(sb, "flow_vol_phase"):
+        sb_flow_vol = getattr(sb, "flow_vol_phase['Liq']")
+    else:
+        raise AttributeError(
+            "Expected 'flow_vol' or 'flow_vol_phase['Liq'] as volumetric flowrate property name for costing the dewatering unit."
+        )
     x = flow_in = pyo.units.convert(
-        blk.unit_model.inlet.flow_vol[t0], to_units=pyo.units.gallon / pyo.units.hr
+        sb_flow_vol,
+        to_units=pyo.units.gallon / pyo.units.hr,
     )
     blk.capital_cost_constraint = pyo.Constraint(
         expr=blk.capital_cost
-        == pyo.units.convert(
+        == blk.cost_factor
+        * pyo.units.convert(
             cost_blk.capital_a_parameter * x + cost_blk.capital_b_parameter,
             to_units=blk.costing_package.base_currency,
         )
@@ -134,15 +156,37 @@ def cost_filter_belt_press(
     Belt Press Filter costing method
     """
     make_capital_cost_var(blk)
+    blk.costing_package.add_cost_factor(blk, "TIC")
     cost_blk = blk.costing_package.filter_belt_press
     t0 = blk.flowsheet().time.first()
+    # Assume inlet state block is `mixed_state` (IDAES Separator or WaterTAP Dewatering unit)
+    if hasattr(blk.unit_model.config, "mixed_state_block"):
+        if blk.unit_model.config.mixed_state_block is None:
+            sb = blk.unit_model.mixed_state[t0]
+        else:
+            sb = blk.unit_model.config.mixed_state_block[t0]
+    else:
+        raise TypeError(
+            "Costing of the dewatering unit is only compatible with an IDAES Separator or WaterTAP Dewatering Unit."
+        )
+
+    if hasattr(sb, "flow_vol"):
+        sb_flow_vol = getattr(sb, "flow_vol")
+    elif hasattr(sb, "flow_vol_phase"):
+        sb_flow_vol = getattr(sb, "flow_vol_phase['Liq']")
+    else:
+        raise AttributeError(
+            "Expected 'flow_vol' or 'flow_vol_phase['Liq'] as volumetric flowrate property name for costing the dewatering unit."
+        )
     x = flow_in = pyo.units.convert(
-        blk.unit_model.inlet.flow_vol[t0], to_units=pyo.units.gallon / pyo.units.hr
+        sb_flow_vol,
+        to_units=pyo.units.gallon / pyo.units.hr,
     )
 
     blk.capital_cost_constraint = pyo.Constraint(
         expr=blk.capital_cost
-        == pyo.units.convert(
+        == blk.cost_factor
+        * pyo.units.convert(
             cost_blk.capital_a_parameter * x + cost_blk.capital_b_parameter,
             to_units=blk.costing_package.base_currency,
         )
@@ -168,15 +212,38 @@ def cost_filter_plate_press(
     Plate Press Filter costing method
     """
     make_capital_cost_var(blk)
+    blk.costing_package.add_cost_factor(blk, "TIC")
 
     cost_blk = blk.costing_package.filter_plate_press
     t0 = blk.flowsheet().time.first()
     x_units = pyo.units.gallon / pyo.units.hr
-    x = flow_in = pyo.units.convert(blk.unit_model.inlet.flow_vol[t0], to_units=x_units)
+    # Assume inlet state block is `mixed_state` (IDAES Separator or WaterTAP Dewatering unit)
+    if hasattr(blk.unit_model.config, "mixed_state_block"):
+        if blk.unit_model.config.mixed_state_block is None:
+            sb = blk.unit_model.mixed_state[t0]
+        else:
+            sb = blk.unit_model.config.mixed_state_block[t0]
+    else:
+        raise TypeError(
+            "Costing of the dewatering unit is only compatible with an IDAES Separator or WaterTAP Dewatering Unit."
+        )
 
+    if hasattr(sb, "flow_vol"):
+        sb_flow_vol = getattr(sb, "flow_vol")
+    elif hasattr(sb, "flow_vol_phase"):
+        sb_flow_vol = getattr(sb, "flow_vol_phase['Liq']")
+    else:
+        raise AttributeError(
+            "Expected 'flow_vol' or 'flow_vol_phase['Liq'] as volumetric flowrate property name for costing the dewatering unit."
+        )
+    x = flow_in = pyo.units.convert(
+        sb_flow_vol,
+        to_units=x_units,
+    )
     blk.capital_cost_constraint = pyo.Constraint(
         expr=blk.capital_cost
-        == pyo.units.convert(
+        == blk.cost_factor
+        * pyo.units.convert(
             cost_blk.capital_a_parameter
             * x_units
             * (x / x_units) ** cost_blk.capital_b_parameter,

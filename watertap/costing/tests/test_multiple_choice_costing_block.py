@@ -12,7 +12,6 @@
 
 import pytest
 
-import os
 import re
 
 import pyomo.environ as pyo
@@ -26,10 +25,9 @@ from watertap.unit_models.reverse_osmosis_0D import (
     MassTransferCoefficient,
     PressureChangeType,
 )
-from watertap.costing import WaterTAPCosting, ROType
+from watertap.costing import WaterTAPCosting
 from watertap.costing.unit_models.reverse_osmosis import (
     cost_reverse_osmosis,
-    cost_high_pressure_reverse_osmosis,
 )
 
 
@@ -173,6 +171,7 @@ def setup_flowsheet():
     )
 
     def my_own_reverse_osmosis_costing(blk):
+        flowsheet = blk.flowsheet()
         blk.variable_operating_cost = pyo.Var(
             initialize=42,
             units=blk.costing_package.base_currency / blk.costing_package.base_period,
@@ -238,7 +237,7 @@ def test_multiple_choice_costing_block():
         m.fs.RO2.costing.costing_blocks["high_pressure"].capital_cost
     )
 
-    assert m.fs.costing.total_capital_cost.value == 2 * (
+    assert m.fs.costing.total_capital_cost.value == (
         m.fs.RO.costing.costing_blocks["normal_pressure"].capital_cost.value
         + m.fs.RO2.costing.costing_blocks["high_pressure"].capital_cost.value
     )
@@ -250,13 +249,13 @@ def test_multiple_choice_costing_block():
     )
 
     # need to re-initialize
-    assert m.fs.costing.total_capital_cost.value == 2 * (
+    assert m.fs.costing.total_capital_cost.value == (
         m.fs.RO.costing.costing_blocks["normal_pressure"].capital_cost.value
         + m.fs.RO2.costing.costing_blocks["high_pressure"].capital_cost.value
     )
 
     m.fs.costing.initialize()
-    assert m.fs.costing.total_capital_cost.value == 2 * (
+    assert m.fs.costing.total_capital_cost.value == (
         m.fs.RO.costing.costing_blocks["high_pressure"].capital_cost.value
         + m.fs.RO2.costing.costing_blocks["high_pressure"].capital_cost.value
     )
@@ -264,7 +263,7 @@ def test_multiple_choice_costing_block():
 
     m.fs.RO3.costing.select_costing_block("high_pressure")
     m.fs.costing.initialize()
-    assert m.fs.costing.total_capital_cost.value == 2 * (
+    assert m.fs.costing.total_capital_cost.value == (
         m.fs.RO.costing.costing_blocks["high_pressure"].capital_cost.value
         + m.fs.RO2.costing.costing_blocks["high_pressure"].capital_cost.value
         + m.fs.RO3.costing.costing_blocks["high_pressure"].capital_cost.value

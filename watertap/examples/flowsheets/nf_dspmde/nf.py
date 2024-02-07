@@ -17,6 +17,7 @@ from pyomo.environ import (
     Constraint,
     NonNegativeReals,
     assert_optimal_termination,
+    value,
 )
 
 
@@ -66,7 +67,7 @@ def main():
     m.write("NF_preoptimize.nl", io_options={"symbolic_solver_labels":True})
     results = optimize(m, solver)
     assert_optimal_termination(results)
-    print("Optimal cost", m.fs.costing.LCOW.value)
+    print("Optimal cost", value(m.fs.costing.LCOW))
     print("Optimal NF pressure (Bar)", m.fs.NF.pump.outlet.pressure[0].value / 1e5)
     print("Optimal area (m2)", m.fs.NF.nfUnit.area.value)
     print(
