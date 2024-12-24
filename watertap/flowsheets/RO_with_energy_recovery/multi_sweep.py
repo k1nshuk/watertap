@@ -9,12 +9,12 @@
 # information, respectively. These files are also available online at the URL
 # "https://github.com/watertap-org/watertap/"
 #################################################################################
-from parameter_sweep import PredeterminedFixedSample, parameter_sweep
+from parameter_sweep import PredeterminedFixedSample, ParameterSweep , parameter_sweep
 import watertap.flowsheets.RO_with_energy_recovery.RO_with_energy_recovery as RO
 from watertap.flowsheets.RO_with_energy_recovery.RO_with_energy_recovery import (
     ERDtype,
 )
-
+import inspect
 
 def set_up_sensitivity():
     outputs = {}
@@ -66,6 +66,104 @@ def set_up_sensitivity():
     return outputs, m
 
 
+def build_model():
+    stack = inspect.stack()
+    caller_frame = stack[1]
+    caller_name = caller_frame.function
+    print()
+    print(f"This function was called by: {caller_name}\n")
+    m = RO.build(erd_type=ERDtype.pump_as_turbine)
+    RO.set_operating_conditions(m)
+    RO.initialize_system(m)
+    RO.solve(m)
+    m.fs.feed.properties[0].flow_mass_phase_comp.unfix()
+    m.fs.feed.properties[0].flow_vol_phase["Liq"].fix()
+    m.fs.feed.properties[0].conc_mass_phase_comp["Liq", "NaCl"].fix()
+    RO.optimize_set_up(m)
+    m.fs.eq_minimum_water_flux.deactivate()
+    RO.solve(m)
+    RO.display_system(m)
+    RO.display_design(m)
+
+    return m
+
+def build_outputs(m):
+    outputs = {}
+    outputs["LCOW"] = m.fs.costing.LCOW
+    # outputs["RO Water Flux"] = m.fs.RO.flux_mass_phase_comp[0, 1, "Liq", "H2O"]
+    # outputs["RO Membrane Area"] = m.fs.RO.area
+    # outputs["RO Energy Consumption"] = m.fs.costing.specific_energy_consumption
+    # outputs["System Capital Cost"] = m.fs.costing.aggregate_capital_cost
+    # outputs["RO Capital Cost"] = m.fs.RO.costing.capital_cost
+    # outputs["Pump Capital Cost"] = m.fs.P1.costing.capital_cost
+    # outputs["ERD Capital Cost"] = m.fs.ERD.costing.capital_cost
+    # outputs["RO Operating Cost"] = m.fs.RO.costing.fixed_operating_cost
+    # outputs[
+    #     "MLC Operating Cost"
+    # ] = m.fs.costing.maintenance_labor_chemical_operating_cost
+    # outputs["Feed Flow Rate"] = m.fs.feed.properties[0].flow_vol_phase["Liq"]
+    # outputs["Permeate Flow Rate"] = m.fs.product.properties[0].flow_vol_phase["Liq"]
+    # outputs["Retentate Flow Rate"] = m.fs.disposal.properties[0].flow_vol_phase["Liq"]
+    # outputs["RO Operating Pressure"] = m.fs.RO.inlet.pressure[0]
+    # outputs["RO Permeate H2O Mass Flow"] = m.fs.RO.permeate.flow_mass_phase_comp[
+    #     0, "Liq", "H2O"
+    # ]
+    # outputs["RO Permeate Salt Mass Flow"] = m.fs.RO.permeate.flow_mass_phase_comp[
+    #     0, "Liq", "NaCl"
+    # ]
+    # outputs["RO Retentate H2O Mass Flow"] = m.fs.RO.retentate.flow_mass_phase_comp[
+    #     0, "Liq", "H2O"
+    # ]
+    # outputs["RO Retentate Salt Mass Flow"] = m.fs.RO.retentate.flow_mass_phase_comp[
+    #     0, "Liq", "NaCl"
+    # ]
+
+    return outputs
+
+def build_sweep_params(m, case_num=1):
+    sweep_params = {}
+
+    if case_num == 1:
+        # Need to unfix mass recovery of water (or simply sweep across it instead of recovery_vol)
+        m.fs.RO.recovery_mass_phase_comp.unfix()
+
+        sweep_params["mass_concentration"] = PredeterminedFixedSample(
+            m.fs.feed.properties[0].conc_mass_phase_comp["Liq", "NaCl"],
+            [0.963], # [0.963, 1.927, 4.816],
+        )
+        sweep_params["volumetric_recovery"] = PredeterminedFixedSample(
+            m.fs.RO.recovery_vol_phase[0, "Liq"], [0.7] # [0.7, 0.8, 0.9]
+        )
+    else:
+        raise ValueError(f"{case_num} is not yet implemented")
+    
+    return sweep_params
+
+def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename=None):
+
+    if output_filename is None:
+        output_filename = "sensitivity_" + str(case_num) + ".csv"
+
+    # when from the command line
+    case_num = int(case_num)
+    interpolate_nan_outputs = False # bool(interpolate_nan_outputs)
+
+    ps = ParameterSweep(
+        optimize_function=RO.solve,
+        csv_results_file_name=output_filename,
+        interpolate_nan_outputs=interpolate_nan_outputs,
+        parallel_back_end="SingleProcessParallelManager",
+        number_of_subprocesses=0
+    )
+    global_results = ps.parameter_sweep(
+        build_model=build_model,
+        build_sweep_params=build_sweep_params,
+        build_sweep_params_kwargs={"case_num": case_num},
+        build_outputs=build_outputs,       
+    )
+
+    return global_results
+
 def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename=None):
 
     if output_filename is None:
@@ -86,10 +184,10 @@ def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename
 
         sweep_params["mass_concentration"] = PredeterminedFixedSample(
             m.fs.feed.properties[0].conc_mass_phase_comp["Liq", "NaCl"],
-            [0.963, 1.927, 4.816],
+            [0.963], # [0.963, 1.927, 4.816],
         )
         sweep_params["volumetric_recovery"] = PredeterminedFixedSample(
-            m.fs.RO.recovery_vol_phase[0, "Liq"], [0.7, 0.8, 0.9]
+            m.fs.RO.recovery_vol_phase[0, "Liq"], [0.7] # [0.7, 0.8, 0.9]
         )
     else:
         raise ValueError(f"{case_num} is not yet implemented")
@@ -100,6 +198,7 @@ def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename
         outputs,
         csv_results_file_name=output_filename,
         optimize_function=RO.solve,
+        # initialize_before_sweep=True,
         interpolate_nan_outputs=interpolate_nan_outputs,
     )
 
@@ -107,5 +206,6 @@ def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename
 
 
 if __name__ == "__main__":
+    # results = run_analysis()
     results, sweep_params, m = run_analysis()
     print(results)
