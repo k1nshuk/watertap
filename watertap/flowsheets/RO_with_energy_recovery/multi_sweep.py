@@ -85,6 +85,8 @@ def build_model():
     RO.display_system(m)
     RO.display_design(m)
 
+    m.fs.RO.recovery_mass_phase_comp.unfix()
+
     return m
 
 def build_outputs(m):
@@ -149,6 +151,7 @@ def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename
     interpolate_nan_outputs = False # bool(interpolate_nan_outputs)
 
     ps = ParameterSweep(
+        # initialize_function=RO.initialize_system,
         optimize_function=RO.solve,
         csv_results_file_name=output_filename,
         interpolate_nan_outputs=interpolate_nan_outputs,
@@ -164,48 +167,50 @@ def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename
 
     return global_results
 
-def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename=None):
+# def run_analysis(case_num=1, nx=5, interpolate_nan_outputs=True, output_filename=None):
 
-    if output_filename is None:
-        output_filename = "sensitivity_" + str(case_num) + ".csv"
+#     if output_filename is None:
+#         output_filename = "sensitivity_" + str(case_num) + ".csv"
 
-    # when from the command line
-    case_num = int(case_num)
-    interpolate_nan_outputs = bool(interpolate_nan_outputs)
+#     # when from the command line
+#     case_num = int(case_num)
+#     interpolate_nan_outputs = bool(interpolate_nan_outputs)
 
-    outputs, m = set_up_sensitivity()
+#     outputs, m = set_up_sensitivity()
 
-    # choose parameter sweep from case structure
-    sweep_params = {}
+#     # choose parameter sweep from case structure
+#     sweep_params = {}
 
-    if case_num == 1:
-        # Need to unfix mass recovery of water (or simply sweep across it instead of recovery_vol)
-        m.fs.RO.recovery_mass_phase_comp.unfix()
+#     if case_num == 1:
+#         # Need to unfix mass recovery of water (or simply sweep across it instead of recovery_vol)
+#         m.fs.RO.recovery_mass_phase_comp.unfix()
 
-        sweep_params["mass_concentration"] = PredeterminedFixedSample(
-            m.fs.feed.properties[0].conc_mass_phase_comp["Liq", "NaCl"],
-            [0.963], # [0.963, 1.927, 4.816],
-        )
-        sweep_params["volumetric_recovery"] = PredeterminedFixedSample(
-            m.fs.RO.recovery_vol_phase[0, "Liq"], [0.7] # [0.7, 0.8, 0.9]
-        )
-    else:
-        raise ValueError(f"{case_num} is not yet implemented")
+#         sweep_params["mass_concentration"] = PredeterminedFixedSample(
+#             m.fs.feed.properties[0].conc_mass_phase_comp["Liq", "NaCl"],
+#             [0.963], # [0.963, 1.927, 4.816],
+#         )
+#         sweep_params["volumetric_recovery"] = PredeterminedFixedSample(
+#             m.fs.RO.recovery_vol_phase[0, "Liq"], [0.7] # [0.7, 0.8, 0.9]
+#         )
+#     else:
+#         raise ValueError(f"{case_num} is not yet implemented")
 
-    global_results = parameter_sweep(
-        m,
-        sweep_params,
-        outputs,
-        csv_results_file_name=output_filename,
-        optimize_function=RO.solve,
-        # initialize_before_sweep=True,
-        interpolate_nan_outputs=interpolate_nan_outputs,
-    )
+#     global_results = parameter_sweep(
+#         m,
+#         sweep_params,
+#         outputs,
+#         csv_results_file_name=output_filename,
+#         optimize_function=RO.solve,
+#         reinitialize_before_sweep=True,
+#         interpolate_nan_outputs=interpolate_nan_outputs,
+#     )
 
-    return global_results, sweep_params, m
+#     return global_results, sweep_params, m
 
 
 if __name__ == "__main__":
-    # results = run_analysis()
-    results, sweep_params, m = run_analysis()
-    print(results)
+    results = run_analysis()
+    # results, sweep_params, m = run_analysis()
+
+    from pprint import pprint
+    pprint(results)
