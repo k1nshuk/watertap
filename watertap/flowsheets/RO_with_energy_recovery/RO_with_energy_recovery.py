@@ -366,10 +366,7 @@ def calculate_operating_pressure(
 def solve(blk, solver=None, tee=False, check_termination=True):
     if solver is None:
         solver = get_solver()
-    with open("blk_new.txt", "w") as f:
-        blk.pprint(ostream=f)
     results = solver.solve(blk, tee=tee)
-    results.write()
     if check_termination:
         assert_optimal_termination(results)
     return results

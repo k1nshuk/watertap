@@ -28,7 +28,7 @@ def test_multi_sweep(case_num, tmp_path):
     nx = 1
     temp = tempfile.NamedTemporaryFile(delete=False)
     temp.close()
-    global_results, sweep_params, m = multi_sweep.run_analysis(
+    global_results = multi_sweep.run_analysis(
         case_num,
         nx,
         interpolate_nan_outputs=False,
