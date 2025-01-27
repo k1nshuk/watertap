@@ -35,6 +35,7 @@ from idaes.models.unit_models import (
     StateJunction,
 )
 
+from watertap.tools.nl_utils import serialize
 from watertap.unit_models.nanofiltration_DSPMDE_0D import (
     NanofiltrationDSPMDE0D,
 )
@@ -61,11 +62,15 @@ __author__ = "Alexander Dudchenko, Adam Atia"
 def main():
     solver = get_solver()
     m = build()
+    serialize(m, "nf_pre_initialize.nl")
     initialize(m, solver)
+    serialize(m, "nf_post_initialize.nl")
     add_objective(m)
     unfix_opt_vars(m)
+    serialize(m, "nf_pre_optimize.nl")
     results = optimize(m, solver)
     assert_optimal_termination(results)
+    serialize(m, "nf_post_optimize.nl")
     print("Optimal cost", value(m.fs.costing.LCOW))
     print("Optimal NF pressure (Bar)", m.fs.NF.pump.outlet.pressure[0].value / 1e5)
     print("Optimal area (m2)", m.fs.NF.nfUnit.area.value)

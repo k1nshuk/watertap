@@ -47,6 +47,7 @@ from watertap.property_models.unit_specific.activated_sludge.asm2d_reactions imp
 )
 
 from watertap.core.util.initialization import check_solve
+from watertap.tools.nl_utils import serialize
 
 # Set up logger
 _log = idaeslog.getLogger(__name__)
@@ -343,10 +344,13 @@ def build_flowsheet():
     def function(unit):
         unit.initialize(outlvl=idaeslog.INFO, optarg={"bound_push": 1e-8})
 
+    serialize(m, "ASM2D_flowsheet_noPHA_pre_initialize.nl")
     seq.run(m, function)
+    serialize(m, "ASM2D_flowsheet_noPHA_post_initialize.nl")
 
     solver = get_solver()
     results = solver.solve(m, tee=False)
+    serialize(m, "ASM2D_flowsheet_noPHA_post_optimize.nl")
     check_solve(results, logger=_log, fail_flag=True)
 
     return m, results

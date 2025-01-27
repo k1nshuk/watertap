@@ -53,6 +53,7 @@ from idaes.core.util.tables import (
 from idaes.core.util.initialization import propagate_state
 from watertap.core.util.initialization import check_solve
 from watertap.costing import WaterTAPCosting
+from watertap.tools.nl_utils import serialize
 
 # Set up logger
 _log = idaeslog.getLogger(__name__)
@@ -191,14 +192,18 @@ def build_flowsheet():
     iscale.set_scaling_factor(m.fs.electroNP.byproduct.flow_vol[0.0], 1e7)
     iscale.set_scaling_factor(m.fs.AD.vapor_phase[0].pressure_sat, 1e-3)
 
+
+    serialize(m, "electroNP_pre_initialize.nl")    
     m.fs.AD.initialize(outlvl=idaeslog.INFO_HIGH)
     propagate_state(m.fs.stream_adm1_translator)
     m.fs.translator_adm1_asm2d.initialize(outlvl=idaeslog.INFO_HIGH)
     propagate_state(m.fs.stream_translator_electroNP)
     m.fs.electroNP.initialize(outlvl=idaeslog.INFO_HIGH)
     m.fs.costing.initialize()
+    serialize(m, "electroNP_post_initialize.nl")
 
     results = solve(m, tee=True)
+    serialize(m, "electroNP_post_solve.nl")
     return m, results
 
 

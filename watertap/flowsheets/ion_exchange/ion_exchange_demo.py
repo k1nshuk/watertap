@@ -29,6 +29,7 @@ from watertap.property_models.multicomp_aq_sol_prop_pack import MCASParameterBlo
 from watertap.unit_models.ion_exchange_0D import IonExchange0D
 from watertap.costing import WaterTAPCosting
 from watertap.core.solvers import get_solver
+from watertap.tools.nl_utils import serialize
 
 import math
 
@@ -52,9 +53,11 @@ def main():
     # Check the degrees of freedom of the model to ensure it is zero.
     check_dof(m)
     # Solve the model. Store the results in a local variable.
+    serialize(m, "ion_exchange_pre_initialize.nl")
     results = solver.solve(m)
     # Ensure the solve resulted in an optimal termination status.
     assert_optimal_termination(results)
+    serialize(m, "ion_exchange_post_initialize.nl")
     # Display the degrees of freedom, termination status, and performance metrics of the model.
     print(f"\nDOF = {degrees_of_freedom(m)}")
     print(f"Model solve {results.solver.termination_condition.swapcase()}")
@@ -73,8 +76,10 @@ def main():
     ix.bed_depth.fix(bed_depth)
     ix.number_columns.fix(num_col)
     check_dof(m)
+    serialize(m, "ion_exchange_pre_optimize.nl")
     results = solver.solve(m)
     assert_optimal_termination(results)
+    serialize(m, "ion_exchange_post_optimize.nl")
     print(f"\nDOF = {degrees_of_freedom(m)}")
     print(f"Model solve {results.solver.termination_condition.swapcase()}")
     display_results(m)

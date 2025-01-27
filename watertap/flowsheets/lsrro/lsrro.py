@@ -10,6 +10,7 @@
 # "https://github.com/watertap-org/watertap/"
 #################################################################################
 
+import os
 import itertools
 
 from pyomo.environ import (
@@ -41,6 +42,7 @@ from idaes.models.unit_models.mixer import MomentumMixingType
 import idaes.core.util.scaling as iscale
 import idaes.logger as idaeslogger
 
+from watertap.tools.nl_utils import serialize
 from watertap.unit_models.reverse_osmosis_1D import (
     ReverseOsmosis1D,
     ConcentrationPolarizationType,
@@ -76,7 +78,6 @@ class ABTradeoff(StrEnum):
     equality_constraint = "equality_constraint"
     none = "none"
 
-
 def run_lsrro_case(
     number_of_stages,
     water_recovery=None,
@@ -106,8 +107,12 @@ def run_lsrro_case(
     )
     set_operating_conditions(m, Cin, Qin)
 
+
+    serialize(m, "lsrro_pre_initialize.nl")
     initialize(m)
+    serialize(m, "lsrro_post_initialize.nl")
     solve(m)
+    serialize(m, "lsrro_post_solve.nl")
     print("\n***---Simulation results---***")
     display_system(m)
     display_design(m)
@@ -126,6 +131,8 @@ def run_lsrro_case(
         AB_gamma_factor,
         B_max,
     )
+
+    serialize(m, "lsrro_pre_optimize.nl")
     res = solve(m, raise_on_failure=False, tee=False)
     print("\n***---Optimization results---***")
     if check_optimal_termination(res):
@@ -133,6 +140,8 @@ def run_lsrro_case(
         display_design(m)
         display_state(m)
         display_RO_reports(m)
+
+    serialize(m, "lsrro_post_optimize.nl")
 
     return m, res
 

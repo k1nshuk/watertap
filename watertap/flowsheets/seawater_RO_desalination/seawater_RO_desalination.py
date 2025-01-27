@@ -64,6 +64,7 @@ from watertap.unit_models.zero_order import (
 )
 from watertap.costing.zero_order_costing import ZeroOrderCosting
 from watertap.costing import WaterTAPCosting
+from watertap.tools.nl_utils import serialize
 
 # Set up logger
 _log = idaeslog.getLogger(__name__)
@@ -95,8 +96,10 @@ def main(erd_type="pressure_exchanger"):
     # set_operating_conditions(m)
     # assert_degrees_of_freedom(m, 0)
 
+    serialize(m, f"seawater_RO_desalination_{erd_type}_pre_initialize.nl")
     initialize_system(m)
     assert_degrees_of_freedom(m, 0)
+    serialize(m, f"seawater_RO_desalination_{erd_type}_post_initialize.nl")
 
     solve(m, checkpoint=f" solve flowsheet after initializing {erd_type} system")
     display_results(m)
@@ -105,7 +108,9 @@ def main(erd_type="pressure_exchanger"):
     initialize_costing(m)
     assert_degrees_of_freedom(m, 0)
 
+    serialize(m, f"seawater_RO_desalination_{erd_type}_pre_optimize.nl")
     solve(m, tee=True, checkpoint=f" solve {erd_type} flowsheet with costing")
+    serialize(m, f"seawater_RO_desalination_{erd_type}_post_optimize.nl")
     display_costing(m)
 
     return m

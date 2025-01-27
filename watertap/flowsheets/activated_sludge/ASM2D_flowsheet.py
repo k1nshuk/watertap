@@ -51,6 +51,7 @@ from watertap.property_models.unit_specific.activated_sludge.asm2d_reactions imp
 )
 
 from watertap.core.util.initialization import check_solve
+from watertap.tools.nl_utils import serialize
 
 # Set up logger
 _log = idaeslog.getLogger(__name__)
@@ -394,7 +395,9 @@ def build_flowsheet():
         if len(badly_scaled_vars) > 0:
             automate_rescale_variables(unit)
 
+    serialize(m, "ASM2D_flowsheet_pre_initialize.nl")
     seq.run(m, function)
+    serialize(m, "ASM2D_flowsheet_post_initialize.nl")
 
     solver = get_solver()
     results = solver.solve(m, tee=False)
@@ -409,6 +412,7 @@ def build_flowsheet():
     m.fs.R7.outlet.conc_mass_comp[:, "S_O2"].unfix()
 
     # Resolve with controls in place
+    serialize(m, "ASM2D_flowsheet_pre_optimize.nl")
     results = solver.solve(m, tee=False)
 
     pyo.assert_optimal_termination(results)
@@ -418,6 +422,8 @@ def build_flowsheet():
         logger=_log,
         fail_flag=True,
     )
+
+    serialize(m, "ASM2D_flowsheet_post_optimize.nl")
 
     return m, results
 

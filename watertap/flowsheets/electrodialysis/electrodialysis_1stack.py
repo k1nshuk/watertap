@@ -34,6 +34,7 @@ from watertap.unit_models.electrodialysis_1D import Electrodialysis1D
 
 from watertap.costing import WaterTAPCosting
 from watertap.property_models.multicomp_aq_sol_prop_pack import MCASParameterBlock
+from watertap.tools.nl_utils import serialize
 
 
 # Set up logger
@@ -48,8 +49,11 @@ def main():
     # Simulate a fully defined operation
     m = build()
     set_operating_conditions(m)
+    serialize(m, "electrodialysis_1stack_pre_initialize.nl")
     initialize_system(m, solver=solver)
+    serialize(m, "electrodialysis_1stack_post_initialize.nl")
     solve(m, solver=solver, checkpoint="solve flowsheet after initializing system")
+    serialize(m, "electrodialysis_1stack_post_solve.nl")
 
     print("\n***---Simulation results---***")
     m.fs.EDstack.report()
@@ -57,9 +61,11 @@ def main():
 
     # Perform an optimization over selected variables
     initialize_system(m, solver=solver)
+    serialize(m, "electrodialysis_1stack_pre_optimize.nl")
     optimize_system(
         m, solver=solver, checkpoint="solve flowsheet after optimizing system"
     )
+    serialize(m, "electrodialysis_1stack_post_optimize.nl")
     print("\n***---Optimization results---***")
     m.fs.EDstack.report()
     display_model_metrics(m)

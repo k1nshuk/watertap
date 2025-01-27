@@ -31,6 +31,7 @@ from watertap.property_models.multicomp_aq_sol_prop_pack import MCASParameterBlo
 from watertap.unit_models.gac import GAC
 from watertap.costing import WaterTAPCosting
 from watertap.core.util.initialization import assert_degrees_of_freedom
+from watertap.tools.nl_utils import serialize
 
 __author__ = "Hunter Barber"
 
@@ -45,8 +46,11 @@ def main():
         diffusivity_calculation="HaydukLaudie",
         cost_contactor_type="pressure",
     )
+    serialize(m, "gac_pre_initialize.nl")
     initialize(m)
+    serialize(m, "gac_post_initialize.nl")
     res = optimize(m)
+    serialize(m, "gac_post_optimize.nl")
     print("solver termination condition:", res.solver.termination_condition)
 
     return m, res

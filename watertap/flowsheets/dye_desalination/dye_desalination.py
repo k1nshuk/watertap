@@ -91,6 +91,7 @@ from watertap.unit_models.gac import GAC
 
 from watertap.costing.zero_order_costing import ZeroOrderCosting
 from watertap.costing import WaterTAPCosting
+from watertap.tools.nl_utils import serialize
 
 # Set up logger
 _log = idaeslog.getLogger(__name__)
@@ -116,15 +117,19 @@ def main(
 
     assert_units_consistent(m)
 
+    serialize(m, "dye_desalination_pre_initialize.nl")
     initialize_system(m)
     assert_degrees_of_freedom(m, 0)
+    serialize(m, "dye_desalination_post_initialize.nl")
 
     results = solve(m, checkpoint="solve flowsheet after initializing system")
     assert_optimal_termination(results)
 
     add_costing(m, dye_revenue=dye_revenue, brine_revenue=brine_revenue)
+    serialize(m, "dye_desalination_pre_initialize_costing.nl")
     initialize_costing(m)
     assert_degrees_of_freedom(m, 0)  # ensures problem is square
+    serialize(m, "dye_desalination_post_initialize_costing.nl")
 
     if hasattr(m.fs, "desalination"):
         optimize_operation(m)  # unfixes specific variables for cost optimization
@@ -133,6 +138,7 @@ def main(
 
     results = solve(m, checkpoint="solve flowsheet after costing")
     assert_optimal_termination(results)
+    serialize(m, "dye_desalination_post_optimize.nl")
 
     display_results(m)
     display_costing(m)

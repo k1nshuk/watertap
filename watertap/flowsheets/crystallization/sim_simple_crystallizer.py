@@ -26,6 +26,7 @@ from idaes.core import UnitModelCostingBlock
 from watertap.property_models.unit_specific import cryst_prop_pack as props
 from watertap.unit_models.crystallizer import Crystallization
 from watertap.costing import WaterTAPCosting, CrystallizerCostType
+from watertap.tools.nl_utils import serialize
 
 
 def main():
@@ -82,11 +83,14 @@ def main():
     m.fs.costing.cost_process()
 
     # solving
+    serialize(m, "sim_simple_crystallizer_pre_initialize.nl")
     m.fs.crystallizer.initialize(outlvl=idaeslog.DEBUG)
+    serialize(m, "sim_simple_crystallizer_post_initialize.nl")
     assert_units_consistent(m)  # check that units are consistent
     assert degrees_of_freedom(m) == 0
     solver = get_solver()
     results = solver.solve(m, tee=True, symbolic_solver_labels=True)
+    serialize(m, "sim_simple_crystallizer_case1_post_optimize.nl")
     assert results.solver.termination_condition == TerminationCondition.optimal
     m.fs.crystallizer.report()
 
@@ -99,6 +103,7 @@ def main():
 
     # solving
     assert degrees_of_freedom(m) == 0
+    serialize(m, "sim_simple_crystallizer_case2_pre_optimize.nl")
     results = solver.solve(m, tee=True)
     assert results.solver.termination_condition == TerminationCondition.optimal
     m.fs.crystallizer.report()
@@ -112,6 +117,7 @@ def main():
 
     # solving
     assert degrees_of_freedom(m) == 0
+    serialize(m, "sim_simple_crystallizer_case3_pre_optimize.nl")
     results = solver.solve(m, tee=True)
     assert results.solver.termination_condition == TerminationCondition.optimal
     m.fs.crystallizer.report()
@@ -125,6 +131,7 @@ def main():
 
     # solving
     assert degrees_of_freedom(m) == 0
+    serialize(m, "sim_simple_crystallizer_case4_pre_optimize.nl")
     results = solver.solve(m, tee=True)
     assert results.solver.termination_condition == TerminationCondition.optimal
     m.fs.crystallizer.report()
@@ -138,6 +145,7 @@ def main():
 
     # solving
     assert degrees_of_freedom(m) == 0
+    serialize(m, "sim_simple_crystallizer_case5_pre_optimize.nl")
     results = solver.solve(m, tee=True)
     assert results.solver.termination_condition == TerminationCondition.optimal
     m.fs.crystallizer.report()

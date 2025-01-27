@@ -62,6 +62,7 @@ from watertap.unit_models.anaerobic_digester import AD
 from watertap.core.util.initialization import (
     check_solve,
 )
+from watertap.tools.nl_utils import serialize
 
 
 from idaes.core.util.initialization import (
@@ -82,8 +83,10 @@ def main(bio_P=False):
     m = build(bio_P=bio_P)
     set_operating_conditions(m)
 
+    serialize(m, "modified_ADM1_flowsheet_with_translators_pre_initialize.nl")
     initialize_system(m)
 
+    serialize(m, "modified_ADM1_flowsheet_with_translators_post_initialize.nl")
     results = solve(m)
 
     pyo.assert_optimal_termination(results)
@@ -93,6 +96,7 @@ def main(bio_P=False):
         logger=_log,
         fail_flag=True,
     )
+    serialize(m, "modified_ADM1_flowsheet_with_translators_post_optimize.nl")
 
     return m, results
 

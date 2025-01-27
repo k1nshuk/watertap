@@ -79,6 +79,8 @@ from watertap.unit_models.thickener import (
 from watertap.core.util.initialization import check_solve
 from watertap.unit_models.electroNP_ZO import ElectroNPZO
 
+from watertap.tools.nl_utils import serialize
+
 # Set up logger
 _log = idaeslog.getLogger(__name__)
 
@@ -93,14 +95,17 @@ def main(has_electroNP=False):
     m.fs.MX3.pressure_equality_constraints[0.0, 3].deactivate()
     print(f"DOF before initialization: {degrees_of_freedom(m)}")
 
+    serialize(m, "BSM2_electroNP_no_bioP_pre_initialize.nl")
     initialize_system(m, has_electroNP=has_electroNP)
     for mx in m.fs.mixers:
         mx.pressure_equality_constraints[0.0, 2].deactivate()
     m.fs.MX3.pressure_equality_constraints[0.0, 2].deactivate()
     m.fs.MX3.pressure_equality_constraints[0.0, 3].deactivate()
     print(f"DOF after initialization: {degrees_of_freedom(m)}")
+    serialize(m, "BSM2_electroNP_no_bioP_post_initialize.nl")
 
     results = solve(m)
+    serialize(m, "BSM2_electroNP_no_bioP_post_optimize.nl")
 
     pyo.assert_optimal_termination(results)
     check_solve(

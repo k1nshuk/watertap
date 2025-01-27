@@ -35,6 +35,7 @@ from idaes.models.unit_models.heat_exchanger import (
     HeatExchanger,
     HeatExchangerFlowPattern,
 )
+from watertap.tools.nl_utils import serialize
 from watertap.unit_models.mvc.components.lmtd_chen_callback import (
     delta_temperature_chen_callback,
 )
@@ -69,12 +70,17 @@ def main():
     solver = get_solver()
     m = build()
     set_operating_conditions(m)
+    serialize(m, "MD_single_stage_continuous_recirculation_pre_initialize.nl")
     initialize_system(m, solver=solver)
+    serialize(m, "MD_single_stage_continuous_recirculation_post_initialize.nl")
 
     optimize_set_up(m)
 
+    serialize(m, "MD_single_stage_continuous_recirculation_pre_fbbt.nl")
     interval_initializer(m)
+    serialize(m, "MD_single_stage_continuous_recirculation_post_fbbt.nl")
     solve(m, solver=solver)
+    serialize(m, "MD_single_stage_continuous_recirculation_post_optimize.nl")
 
     print("\n***---optimization results---***")
     display_system(m)

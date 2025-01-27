@@ -56,6 +56,7 @@ from watertap.flowsheets.generic_desalination_train.unit_operations import (
     mixer,
     separator,
 )
+from watertap.tools.nl_utils import serialize
 
 import logging
 
@@ -73,7 +74,9 @@ __author__ = "Alexander V. Dudchenko"
 
 def main():
     m = build()
+    serialize(m, "generic_train_pre_initialize.nl")
     initialize(m)
+    serialize(m, "generic_train_post_initialize.nl")
     m.fs.Pretreatment.separator.component_removal_percent["X"].fix(50)
     m.fs.Pretreatment.separator.separation_cost["X"].fix(0.5)
     m.fs.Valorizer.separator.product_value["X"].fix(1)
@@ -85,7 +88,9 @@ def main():
     m.fs.Desal_2.desalter.recovery_cost_offset.fix(35)
     m.fs.Desal_3.desalter.water_recovery.unfix()
     m.fs.Desal_3.desalter.brine_water_mass_percent.fix(80)
+    serialize(m, "generic_train_pre_optimize.nl")
     result = solve(m)
+    serialize(m, "generic_train_post_optimize.nl")
     return result
 
 

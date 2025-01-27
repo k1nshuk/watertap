@@ -43,17 +43,24 @@ from watertap.flowsheets.nf_dspmde import nf
 
 from watertap.costing import WaterTAPCosting
 
+from watertap.tools.nl_utils import serialize
+
 __author__ = "Alexander Dudchenko, Adam Atia"
 
 
 def main():
     solver = get_solver()
     m = build()
+
+    serialize(m, "nf_with_bypass_pre_initialize.nl")
     initialize(m, solver)
+    serialize(m, "nf_with_bypass_post_initialize.nl")
     unfix_opt_vars(m)
     nf.add_objective(m)
+    serialize(m, "nf_with_bypass_pre_optimize.nl")
     results = optimize(m, solver)
     assert_optimal_termination(results)
+    serialize(m, "nf_with_bypass_post_optimize.nl")
     print("Optimal cost", value(m.fs.costing.LCOW))
     print("Optimal NF pressure (Bar)", m.fs.NF.pump.outlet.pressure[0].value / 1e5)
     print("Optimal area (m2)", m.fs.NF.nfUnit.area.value)

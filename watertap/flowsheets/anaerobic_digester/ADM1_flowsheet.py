@@ -29,6 +29,7 @@ from watertap.property_models.unit_specific.anaerobic_digestion.adm1_properties_
 from watertap.property_models.unit_specific.anaerobic_digestion.adm1_reactions import (
     ADM1ReactionParameterBlock,
 )
+from watertap.tools.nl_utils import serialize
 
 
 def build_flowsheet():
@@ -93,12 +94,18 @@ def build_flowsheet():
     iscale.calculate_scaling_factors(m)
 
     # TO DO: Fix initialization
+    serialize(m, "ADM1_flowsheet_pre_initialize.nl")
     m.fs.R1.initialize(outlvl=idaeslog.INFO_HIGH)
 
     solver = get_solver()
 
+    serialize(m, "ADM1_flowsheet_pre_optimize.nl")
     results = solver.solve(m, tee=True)
+    serialize(m, "ADM1_flowsheet_post_optimize.nl")
 
     pyo.assert_optimal_termination(results)
 
     return m, results
+
+if __name__ == "__main__":
+    m, results = build_flowsheet()

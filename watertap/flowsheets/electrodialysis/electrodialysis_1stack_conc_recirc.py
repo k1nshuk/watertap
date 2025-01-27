@@ -44,6 +44,7 @@ from watertap.unit_models.electrodialysis_1D import (
 from watertap.unit_models.electrodialysis_1D import Electrodialysis1D
 from watertap.costing.watertap_costing_package import WaterTAPCosting
 from watertap.property_models.multicomp_aq_sol_prop_pack import MCASParameterBlock
+from watertap.tools.nl_utils import serialize
 
 __author__ = "Xiangyu Bi"
 _log = idaeslogger.getLogger(__name__)
@@ -75,10 +76,13 @@ def main():
     _condition_base(m)
 
     # Initialize and solve the model
+    serialize(m, "electrodialysis_1stack_conc_recirc_pre_initialize.nl")
     initialize_system(m, solver=solver)
+    serialize(m, "electrodialysis_1stack_conc_recirc_post_initialize.nl")
     solve(m, solver=solver)
     print("\n***---Fully-defined simulation results, Fixed inlet and voltage---***")
     display_model_metrics(m)
+    serialize(m, "electrodialysis_1stack_conc_recirc_post_solve.nl")
 
     # Perform an optimization over cell_length, cell_pair_mum, and voltage_applied
 
@@ -100,11 +104,13 @@ def main():
         1.7094
     )  # Corresponding to C_product = 100 ppm
     m.fs.objective = Objective(expr=m.fs.costing.LCOW)
+    serialize(m, "electrodialysis_1stack_conc_recirc_pre_optimize.nl")
     solve(m, solver=solver, tee=True)
     m.fs.EDstack.cell_pair_num.fix(round(m.fs.EDstack.cell_pair_num.value))
     solve(m, solver=solver, tee=True)
     print("\n***---Optimization results, Product conc = 100 ppb---***")
     display_model_metrics(m)
+    serialize(m, "electrodialysis_1stack_conc_recirc_post_optimize.nl")
 
     return m
 

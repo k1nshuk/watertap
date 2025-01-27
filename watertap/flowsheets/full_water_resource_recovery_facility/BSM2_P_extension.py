@@ -88,6 +88,7 @@ from watertap.costing.unit_models.clarifier import (
     cost_circular_clarifier,
     cost_primary_clarifier,
 )
+from watertap.tools.nl_utils import serialize
 
 # Set up logger
 _log = idaeslog.getLogger(__name__)
@@ -103,6 +104,7 @@ def main(bio_P=False):
     m.fs.MX3.pressure_equality_constraints[0.0, 3].deactivate()
     print(f"DOF before initialization: {degrees_of_freedom(m)}")
 
+    serialize(m, "BSM2_P_extension_pre_initialize.nl")
     initialize_system(m, bio_P=bio_P)
     for mx in m.fs.mixers:
         mx.pressure_equality_constraints[0.0, 2].deactivate()
@@ -133,13 +135,16 @@ def main(bio_P=False):
 
     add_costing(m)
     m.fs.costing.initialize()
+    serialize(m, "BSM2_P_extension_post_initialize.nl")
 
     interval_initializer(m.fs.costing)
+    serialize(m, "BSM2_P_extension_post_fbbt.nl")
 
     assert_degrees_of_freedom(m, 0)
 
     results = solve(m)
     pyo.assert_optimal_termination(results)
+    serialize(m, "BSM2_P_extension_post_optimize.nl")
 
     display_costing(m)
     display_performance_metrics(m)

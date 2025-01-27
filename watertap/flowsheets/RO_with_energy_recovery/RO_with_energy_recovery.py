@@ -31,6 +31,7 @@ import idaes.core.util.scaling as iscale
 import idaes.logger as idaeslog
 from idaes.core.util.misc import StrEnum
 
+from watertap.tools.nl_utils import serialize
 import watertap.property_models.NaCl_prop_pack as props
 from watertap.unit_models.reverse_osmosis_0D import (
     ReverseOsmosis0D,
@@ -65,13 +66,17 @@ def main(erd_type=ERDtype.pressure_exchanger):
     # build, set, and initialize
     m = build(erd_type=erd_type)
     set_operating_conditions(m)
+    serialize(m, "RO_with_ERD_pre_initialize.nl")
     initialize_system(m, solver=solver)
 
     assert_optimal_termination(solve(m, solver=solver))
+    serialize(m, "RO_with_ERD_post_initialize.nl")
 
     # optimize and display
     optimize_set_up(m)
+    serialize(m, "RO_with_ERD_pre_optimize.nl")
     solve(m, solver=solver)
+    serialize(m, "RO_with_ERD_post_optimize.nl")
 
     display_system(m)
     display_design(m)

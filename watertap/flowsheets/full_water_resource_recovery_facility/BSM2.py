@@ -68,6 +68,7 @@ from watertap.costing.unit_models.clarifier import (
     cost_circular_clarifier,
     cost_primary_clarifier,
 )
+from watertap.tools.nl_utils import serialize
 from pyomo.util.check_units import assert_units_consistent
 
 
@@ -77,6 +78,7 @@ def main(reactor_volume_equalities=False):
 
     assert_degrees_of_freedom(m, 0)
     assert_units_consistent(m)
+    serialize(m, "BSM2_pre_initialize.nl")
     initialize_system(m)
 
     assert_degrees_of_freedom(m, 0)
@@ -86,6 +88,7 @@ def main(reactor_volume_equalities=False):
     add_costing(m)
     m.fs.costing.initialize()
     assert_degrees_of_freedom(m, 0)
+    serialize(m, "BSM2_post_initialize.nl")
 
     results = solve(m)
     pyo.assert_optimal_termination(results)
@@ -95,8 +98,10 @@ def main(reactor_volume_equalities=False):
     display_costing(m)
 
     setup_optimization(m, reactor_volume_equalities=reactor_volume_equalities)
+    serialize(m, "BSM2_pre_optimize.nl")
     results = solve(m, tee=True)
     pyo.assert_optimal_termination(results)
+    serialize(m, "BSM2_post_optimize.nl")
     print("\n\n=============OPTIMIZATION RESULTS=============\n\n")
     # display_results(m)
     display_costing(m)

@@ -65,6 +65,7 @@ from watertap.property_models.unit_specific.activated_sludge.asm1_reactions impo
 )
 
 from watertap.core.util.initialization import check_solve
+from watertap.tools.nl_utils import serialize
 
 # Set up logger
 _log = idaeslog.getLogger(__name__)
@@ -302,7 +303,9 @@ def build_flowsheet():
     def function(unit):
         unit.initialize(outlvl=idaeslog.INFO)
 
+    serialize(m, "ASM1_flowsheet_pre_initialize.nl")
     seq.run(m, function)
+    serialize(m, "ASM1_flowsheet_post_initialize.nl")
 
     # Solve overall flowsheet to close recycle loop
     solver = get_solver()
@@ -316,6 +319,7 @@ def build_flowsheet():
     m.fs.R4.outlet.conc_mass_comp[:, "S_O"].unfix()
 
     # Resolve with controls in place
+    serialize(m, "ASM1_flowsheet_pre_optimize.nl")
     results = solver.solve(m, tee=True)
     check_solve(
         results,
@@ -323,6 +327,7 @@ def build_flowsheet():
         logger=_log,
         fail_flag=True,
     )
+    serialize(m, "ASM1_flowsheet_post_optimize.nl")
 
     return m, results
 

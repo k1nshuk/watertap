@@ -49,13 +49,17 @@ import watertap.property_models.water_prop_pack as props_w
 from watertap.costing import WaterTAPCosting
 import math
 
+from watertap.tools.nl_utils import serialize
+
 
 def main():
     # build, set operating conditions, initialize for simulation
     m = build()
     set_operating_conditions(m)
     add_Q_ext(m, time_point=m.fs.config.time)
+    serialize(m, "mvc_single_stage_pre_initialize.nl")
     initialize_system(m)
+    serialize(m, "mvc_single_stage_post_initialize.nl")
     # rescale costs after initialization because scaling depends on flow rates
     scale_costs(m)
     fix_outlet_pressures(m)  # outlet pressure are initially unfixed for initialization
@@ -67,9 +71,11 @@ def main():
 
     print("\n***---First solve - simulation results---***")
     solver = get_solver()
+    serialize(m, "mvc_single_stage_pre_optimize.nl")
     results = solve(m, solver=solver, tee=False)
     print("Termination condition: ", results.solver.termination_condition)
     assert_optimal_termination(results)
+    serialize(m, "mvc_single_stage_post_optimize.nl")
     display_metrics(m)
     display_design(m)
 
